@@ -60,8 +60,19 @@ def slice_image(image: Image.Image, coords: Dict[str, list[int]]) -> Dict[str, I
     return layers
 
 def typography_engine(industry_vertical: str) -> str:
-    matrix = {"tech": "sans-serif", "finance": "serif", "creative": "DejaVuSans"}
-    return matrix.get(industry_vertical.lower(), "DejaVuSans")
+    matrix = {"tech": "sans-serif", "finance": "serif", "creative": "DejaVuSans", "logistics": "LeagueSpartan-Bold"}
+    font_name = matrix.get(industry_vertical.lower(), "DejaVuSans")
+
+    font_path = f"{font_name}.ttf"
+    if font_name == "LeagueSpartan-Bold" and not os.path.exists(font_path):
+        import urllib.request
+        url = "https://github.com/googlefonts/leaguespartan/raw/main/fonts/ttf/LeagueSpartan-Bold.ttf"
+        try:
+            urllib.request.urlretrieve(url, font_path)
+        except Exception as e:
+            print(f"Failed to download {font_name}: {e}")
+
+    return font_name
 
 def image_match_score(img1: Image.Image, img2: Image.Image) -> float:
     if img1.size != img2.size:
@@ -78,7 +89,9 @@ def optimize_layout_loop(
     offset_x: int = -50, offset_y: int = -50, margin: int = 0, iteration: int = 0, max_iterations: int = 100
 ) -> Tuple[Image.Image, float, Dict[str, int]]:
     width, height = master_composition.size
-    canvas = Image.new('RGB', (width, height), color='white')
+    # Extract background color dynamically from master composition's top-left pixel
+    bg_color = master_composition.convert("RGB").getpixel((0, 0))
+    canvas = Image.new('RGB', (width, height), color=bg_color)
     draw = ImageDraw.Draw(canvas)
 
     try:
@@ -118,7 +131,7 @@ def optimize_layout_loop(
     adjustments = [(step_size, 0, 0), (-step_size, 0, 0), (0, step_size, 0), (0, -step_size, 0), (0, 0, step_size), (0, 0, -step_size)]
 
     for dx, dy, dm in adjustments:
-        test_canvas = Image.new('RGB', (width, height), color='white')
+        test_canvas = Image.new('RGB', (width, height), color=bg_color)
         test_draw = ImageDraw.Draw(test_canvas)
 
         test_margin = margin + dm
@@ -162,7 +175,8 @@ def run_pipeline(config_json_path: str, input_image_path: str, master_compositio
 
     target_font = typography_engine(industry_vertical)
     icon = layers["icon"]
-    # Scale icon if it's too large for the master composition
+
+    # Handle resizing the icon dynamically based on canvas
     max_icon_width = master_composition.width * 0.8
     max_icon_height = master_composition.height * 0.6
     if icon.width > max_icon_width or icon.height > max_icon_height:

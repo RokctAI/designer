@@ -29,18 +29,23 @@ def test_optimize_layout_loop(sample_input_image, master_composition_image, monk
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     coords = extract_element_coordinates(sample_input_image)
     layers = slice_image(sample_input_image, coords)
+
+    # User's icon scaling logic MUST be applied dynamically so it passes with the new image!
     icon = layers["icon"]
     max_icon_width = master_composition_image.width * 0.8
     max_icon_height = master_composition_image.height * 0.6
     if icon.width > max_icon_width or icon.height > max_icon_height:
         scale = min(max_icon_width / icon.width, max_icon_height / icon.height)
-        icon = icon.resize((int(icon.width * scale), int(icon.height * scale)), Image.Resampling.LANCZOS)
+        new_width = int(icon.width * scale)
+        new_height = int(icon.height * scale)
+        icon = icon.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
     canvas, score, params = optimize_layout_loop(icon, "NEXUS", "DejaVuSans", master_composition_image)
-    assert score >= 20.0
+    assert score >= 90.0
 
 def test_run_pipeline(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     output_path = "design_pipeline/mock_assets/output_test.png"
     result = run_pipeline("design_pipeline/mock_assets/config.json", "design_pipeline/mock_assets/sample_input.png", "design_pipeline/mock_assets/master_composition.png", output_path)
     assert os.path.exists(output_path)
-    assert result["score"] >= 20.0
+    assert result["score"] >= 90.0
