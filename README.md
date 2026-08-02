@@ -156,10 +156,9 @@ take generated art, make it clean, on-brand, accessible and delivery-ready,
 deterministically and at scale. The roadmap toward senior-level scope:
 
 - deeper layout intelligence (alignment detection, optical spacing);
-- semantic layer annotation via a vision model — tagging shapes as
-  icon / wordmark / decoration so they move as units in editors and
-  survive re-layout (an approach first prototyped in this repo's early
-  `design_pipeline` branch using Gemini bounding-box extraction);
+- semantic layer annotation via a vision model — a VLM (e.g. Gemini
+  bounding-box extraction) tagging regions as icon / wordmark /
+  decoration so they move as units in editors and survive re-layout;
 - photo-region handling (detect and embed, or reject) alongside vector layers;
 - brand-system linting for whole campaigns (cross-deliverable consistency);
 - a feedback loop that turns audit findings into regeneration prompts.

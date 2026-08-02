@@ -136,10 +136,9 @@ role. The engine parser dropping unknown tags is the sanitizer.
 3. Fonts: searchable font select (Google Fonts static list bundled at
    build time — name + category only, no font files needed server-side);
    `descriptor` auto-filled from category, editable. Offer an optional
-   "suggest by industry" shortcut (industry vertical -> starter font +
-   type-scale defaults, e.g. finance -> serif, logistics -> bold
-   geometric sans) — an idea carried over from the early
-   `design_pipeline` prototype's typography matrix.
+   "suggest by industry" shortcut: a small static matrix mapping
+   industry vertical -> starter font + type-scale defaults (e.g.
+   finance -> serif, logistics -> bold geometric sans).
 4. Rules: grid, type scale, stroke widths, max colors, gradient
    allowed/max stops, contrast minimums — pre-filled with engine
    defaults inside a collapsed "Advanced" section. Most users never
