@@ -31,6 +31,14 @@ AI image  ──►  vectorize  ──►  audit against design system  ──�
   inpainted away, and the copy is re-emitted as real, editable SVG
   `<text>` — which the typography rules force into the brand font, type
   scale and contrast. The hallucinated font never survives; the words do.
+- **Deliverable formats — beyond logos.** A built-in catalog of real
+  deliverables (`designer formats`): Instagram post/story, X post,
+  YouTube thumbnail, LinkedIn/Facebook banners, OG image, A4/A3
+  posters, business card, display ads, slides. Passing
+  `--format instagram-story` rescales the artwork onto the exact
+  target canvas (paths, gradients and text transformed together) and
+  enforces per-format safe margins and minimum legible text size —
+  plus a text-hierarchy check for multi-text layouts.
 - **Design system as data.** Your standard lives in a YAML file: brand
   color tokens, color cap, font whitelist, modular type scale, spacing
   grid, stroke-width scale, WCAG contrast minimums. The engine enforces
@@ -68,6 +76,10 @@ designer comply ai_logo.png -o ai_logo.svg
 
 # Enforce your own brand
 designer comply poster.png --system brand/acme.yaml -o poster.svg
+
+# Target a real deliverable: exact canvas, safe margins, legible text
+designer formats
+designer comply art.png --format instagram-story -o story.svg
 
 # Gate a pipeline: fail CI when a deliverable is off-brand
 designer audit deliverable.svg --min-score 95 --json
@@ -115,6 +127,10 @@ accessibility:
 | `type.font` | fonts from the whitelist | replace with primary font |
 | `type.scale` | sizes from the type scale | snap to nearest |
 | `a11y.contrast` | WCAG contrast for text | recolor to best-contrast token |
+| `type.hierarchy` | multi-text layouts span ≥2 scale levels | report only |
+| `format.canvas` | canvas matches the target format | rescale + center onto format |
+| `format.margin` | text inside the format's safe margin | move inside (grid-aligned) |
+| `format.min-text` | text ≥ the format's legibility floor | bump to on-scale size |
 | `geometry.transform` | flags unevaluated transforms | report only |
 
 All color math runs in **OKLab**, so "nearest color" matches human
@@ -139,7 +155,7 @@ Today the engine covers the production half of a junior designer's job:
 take generated art, make it clean, on-brand, accessible and delivery-ready,
 deterministically and at scale. The roadmap toward senior-level scope:
 
-- layout intelligence (alignment, optical spacing, hierarchy scoring);
+- deeper layout intelligence (alignment detection, optical spacing);
 - photo-region handling (detect and embed, or reject) alongside vector layers;
 - brand-system linting for whole campaigns (cross-deliverable consistency);
 - a feedback loop that turns audit findings into regeneration prompts.

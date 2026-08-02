@@ -14,6 +14,7 @@ from pathlib import Path
 
 from designer import __version__
 from designer.engine import ComplianceEngine
+from designer.formats import all_formats
 from designer.svg import save
 from designer.tokens import load_system
 from designer.vectorize import VectorizeOptions
@@ -26,6 +27,14 @@ def _add_system_arg(parser: argparse.ArgumentParser) -> None:
         metavar="YAML",
         default=None,
         help="design system YAML (default: bundled default system)",
+    )
+
+
+def _add_format_arg(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--format", "-f", dest="format", default=None, metavar="NAME",
+        help="target deliverable format (see 'designer formats'); enforces "
+        "canvas size, safe margins and minimum text size",
     )
 
 
@@ -89,7 +98,7 @@ def cmd_vectorize(args: argparse.Namespace) -> int:
 
 
 def cmd_audit(args: argparse.Namespace) -> int:
-    engine = ComplianceEngine(load_system(args.system))
+    engine = ComplianceEngine(load_system(args.system), format=args.format)
     doc = engine.load(args.input, _vector_options(args))
     report = engine.audit(doc)
     print(report.to_json() if args.json else report.to_text())
@@ -97,7 +106,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
 
 
 def cmd_comply(args: argparse.Namespace) -> int:
-    engine = ComplianceEngine(load_system(args.system))
+    engine = ComplianceEngine(load_system(args.system), format=args.format)
     doc = engine.load(args.input, _vector_options(args))
     before = engine.audit(doc).score
     report = engine.comply(doc)
@@ -132,6 +141,23 @@ def cmd_tokens(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_formats(args: argparse.Namespace) -> int:
+    current = None
+    for spec in all_formats():
+        if spec.category != current:
+            current = spec.category
+            print(f"\n{current}")
+        size = f"{spec.width:g}x{spec.height:g}"
+        extras = []
+        if spec.margin:
+            extras.append(f"margin {spec.margin:.0%}")
+        if spec.min_text_size:
+            extras.append(f"min text {spec.min_text_size:g}px")
+        extra = f"  ({', '.join(extras)})" if extras else ""
+        print(f"  {spec.name:20s} {size:12s} {spec.description}{extra}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="designer",
@@ -150,6 +176,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("audit", help="score a design against the design system")
     p.add_argument("input", help="SVG or raster image")
+    _add_format_arg(p)
     p.add_argument("--json", action="store_true", help="machine-readable output")
     p.add_argument(
         "--min-score", type=float, default=0.0, metavar="N",
@@ -161,6 +188,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("comply", help="vectorize/parse, auto-fix violations, write compliant SVG")
     p.add_argument("input", help="SVG or raster image")
+    _add_format_arg(p)
     p.add_argument("--output", "-o", default=None)
     p.add_argument("--json", action="store_true", help="machine-readable output")
     p.add_argument(
@@ -174,6 +202,9 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("tokens", help="print the active design system")
     _add_system_arg(p)
     p.set_defaults(func=cmd_tokens)
+
+    p = sub.add_parser("formats", help="list deliverable formats")
+    p.set_defaults(func=cmd_formats)
 
     args = parser.parse_args(argv)
     return args.func(args)

@@ -40,14 +40,17 @@ def build_prompt(system_doc, asset_type: str, brief: str = "",
 
 Composition order (all parts joined with commas/periods into one prompt):
 
-1. **Subject** — the user's brief if given, else the asset-type default:
-   | asset_type | zero-prompt subject template |
+1. **Subject** — the user's brief if given, else the default for the
+   format's *category* (formats come from the engine catalog):
+   | format category | zero-prompt subject template |
    |---|---|
-   | Logo | `minimal abstract logomark for "{brand_name}"` |
-   | Icon | `simple single-concept icon` |
-   | Poster | `bold promotional poster composition with a single focal shape` |
-   | Banner | `wide banner composition with strong focal point on one side` |
-   | Social Card | `square social media card with centered focal graphic` |
+   | brand | `minimal abstract logomark for "{brand_name}"` |
+   | social | `bold social media graphic with a single focal shape and short headline space` |
+   | print | `poster composition with strong focal point and headline space` |
+   | web | `wide banner composition with focal point on one side` |
+   | presentation | `clean title-slide background composition` |
+   Aspect-ratio guidance is appended from the format's dimensions
+   (e.g. `vertical 9:16 composition` for instagram-story).
 2. **Palette injection** — name + hex of every color token:
    `using only these exact colors: deep blue #1a56db, amber #f59e0b, near-black #111827, white #ffffff`.
    Generators follow hex hints imperfectly, but they land close — and
@@ -90,7 +93,7 @@ reproducible and debuggable. `jobs.process_design_request` uses
 
 | Method | Args | Returns / behavior |
 |---|---|---|
-| `generate_quick` | asset_type, design_system=None, brief="" | composes prompt via build_prompt, creates + enqueues a Design Request; returns `{"name"}`. This is the "just click Generate Logo" path. |
+| `generate_quick` | format, design_system=None, brief="" | composes prompt via build_prompt, creates + enqueues a Design Request; returns `{"name"}`. This is the "just click Generate Logo" path. |
 | `get_design_system` | name | full JSON: brand_name, tokens `[{name, hex, role}]`, fonts `[{name, descriptor}]`, type_scale, grid, stroke_widths, gradient config, contrast minimums. Drives the editor's constrained controls. |
 | `save_candidate_edit` | candidate, svg (string) | parse + **audit** the edited SVG against the request's system. If violations are auto-fixable, run comply and return the fixed SVG. Creates a Design Candidate Revision. Returns `{"svg", "score", "report_json", "revision"}`. Reject (417) only if the SVG is unparseable. |
 | `extract_palette` | file_url, n=6 | engine palette extraction from an uploaded image (`designer.raster.quantize` + `palette_report`): returns `[{hex, coverage}]`. Powers "import brand colors from your existing logo" in the setup wizard. |
@@ -146,7 +149,13 @@ Saves via standard Frappe REST on the Design System DocType.
 
 **`/studio` — generate**
 
-- Asset-type tiles (Logo / Icon / Poster / Banner / Social Card).
+- Format tiles grouped by category, straight from the engine catalog
+  (expose it via a `list_formats` whitelisted method that returns
+  `designer.formats.all_formats()` as JSON): **Brand** logo, icon —
+  **Social** Instagram post/story, X post, Facebook cover, LinkedIn
+  banner, YouTube thumbnail — **Print** A4/A3 poster, business card —
+  **Web** OG image, display ads — **Presentation** 16:9 slide. Each
+  tile shows name + aspect-ratio thumbnail.
 - One optional textarea: placeholder *"Optional — describe what you
   want. Leave empty and we'll compose it from your brand."*
 - Generate button → `generate_quick` → progress card with per-slot

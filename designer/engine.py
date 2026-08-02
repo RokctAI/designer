@@ -9,8 +9,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from designer.formats import FormatSpec, get_format
 from designer.report import Report
 from designer.rules import DEFAULT_RULES, Rule
+from designer.rules.format_rules import CanvasFormatRule, MinTextSizeRule, SafeMarginRule
 from designer.svg import Document, parse_svg
 from designer.tokens import DesignSystem
 from designer.vectorize import VectorizeOptions, vectorize_file
@@ -19,9 +21,23 @@ RASTER_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tiff", ".
 
 
 class ComplianceEngine:
-    def __init__(self, system: DesignSystem, rules: list[Rule] | None = None):
+    def __init__(
+        self,
+        system: DesignSystem,
+        rules: list[Rule] | None = None,
+        format: FormatSpec | str | None = None,
+    ):
         self.system = system
-        self.rules = rules if rules is not None else list(DEFAULT_RULES)
+        if isinstance(format, str):
+            format = get_format(format)
+        self.format = format
+        base = rules if rules is not None else list(DEFAULT_RULES)
+        if format is not None:
+            # Canvas rescale runs first so every later rule (grid, type
+            # scale...) operates in final coordinates; margin/legibility
+            # run last, after typography has settled.
+            base = [CanvasFormatRule(format), *base, SafeMarginRule(format), MinTextSizeRule(format)]
+        self.rules = base
 
     def audit(self, doc: Document) -> Report:
         """Check only — the document is not modified."""

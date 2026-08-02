@@ -40,7 +40,7 @@ from designer.svg import serialize
 from designer.vectorize import VectorizeOptions
 
 system = system_from_dict(design_system_doc.as_engine_dict())  # DB -> engine
-engine = ComplianceEngine(system)
+engine = ComplianceEngine(system, format="instagram-post")  # format optional
 doc = engine.load("/path/raw.png", VectorizeOptions(n_colors=6))
 audit = engine.audit(doc)          # read-only Report (score, findings)
 report = engine.comply(doc)        # fixes doc in place, returns Report
@@ -136,8 +136,7 @@ Naming: autoname `DR-.#####`. Track changes on.
 | title | Data | first 60 chars of prompt if empty |
 | prompt | Small Text, reqd | user's creative brief |
 | design_system | Link Design System, reqd | defaults to owner's is_default system |
-| asset_type | Select | `Logo\nIcon\nPoster\nBanner\nSocial Card\nIllustration\nOther`, default Logo |
-| size | Select | `512x512\n1024x1024\n1024x1792\n1792x1024`, default 1024x1024 |
+| format | Data, reqd | engine format name (`logo`, `instagram-post`, `instagram-story`, `x-post`, `a4-poster`, `business-card`, ... — validate against `designer.formats.get_format`), default `logo`. Replaces the earlier asset_type+size pair: the format determines canvas, safe margin, min text size AND the generation size request. |
 | n_candidates | Int | 2 (cap 4) |
 | min_score | Float | 95 |
 | max_attempts | Int | 3 (regenerations per candidate slot) |
@@ -357,9 +356,13 @@ accessibility:
 | Photographic regions | flattened to color blobs — wrong for photo-heavy work | reject at product level: asset_type list contains only flat-graphic types |
 | Any existing SVG (from any tool) | fully auditable and fixable | powers `audit_upload` / `comply_upload` and CI-style brand gates |
 
-Not logo-limited: the engine is content-agnostic over flat graphics —
-`asset_type` only changes prompt templates and default sizes, not the
-pipeline.
+Not logo-limited: the engine ships a deliverable-format catalog
+(`designer.formats.all_formats()` — social, print, web, presentation).
+Passing the request's format to ComplianceEngine enforces exact canvas
+(auto-rescale), safe margins and per-format minimum text size. The
+provider should be asked for the generation size closest to the
+format's aspect ratio; the engine rescales precisely onto the target
+canvas afterward.
 
 ---
 
