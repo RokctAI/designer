@@ -183,6 +183,14 @@ badges, per-card "derived from master" or "regenerated" tag. Any card
 opens the standard editor. "Download all" exports a zip via repeated
 `render_png`.
 
+**`/studio/issues` + `/studio/issues/[id]` — issue flatplan**
+
+Ad-inventory back office for publications (FIELD_ADS_SPEC §4): issue
+index with fill % and sales-deadline countdown; per-issue flatplan
+board — pages as grids, placements color-coded Hold/Confirmed, drag to
+reposition same-size (until Layout Locked), fragmentation hints, and
+"Export issue" (all confirmed ads as SVG/PNG named by page/position).
+
 **Field capture is NOT in this app.** The field ad flow is a separate
 **Flutter** tablet app (camera-native, offline queue) specified in
 `FIELD_ADS_SPEC.md` §5, talking to the same Frappe API. This Next.js

@@ -108,6 +108,7 @@ As v1, plus composite items:
 | Field | Type | Notes |
 |---|---|---|
 | advertiser / publication / ad_unit / template | Links | |
+| issue / placement | Link Publication Issue / Link Ad Placement | set by the booking flow (§4.2); placement state follows capture status |
 | fields_json | JSON | headline, offer, contact... (single kind) |
 | items | Table -> Ad Capture Item | composite kind |
 | status | Select | `Captured\nRendered\nApproved\nRejected\nPublished` |
@@ -177,7 +178,88 @@ Product photos stay raster (`<image>` with attached-file href;
 and rescales their geometry but never vectorizes their content —
 that's correct for photographs.
 
-## 4. API (extends v1's §5)
+## 4. Issue inventory & flatplan (don't sell what you can't print)
+
+The page grid makes inventory computable: an issue has N ad pages,
+each a `columns x rows` grid; every sold ad occupies a `col_span x
+row_span` rectangle. Availability is a **placement** question, not a
+cell count — 4 scattered free cells do not fit a 2x2 quarter page —
+so every availability answer comes from actually attempting a
+first-fit placement against current holds + confirmations.
+
+### 4.1 DocTypes
+
+**Publication Issue**: `publication` (Link), `issue_no`,
+`publish_date`, `sales_deadline` (Datetime — no new holds after),
+`status` (`Open\nLayout Locked\nPublished`), `pages` (Table ->
+Issue Page).
+
+**Issue Page** (child): `page_no`, `sellable` (Check — cover/editorial
+pages excluded), `reserved_cells` (Data — CSV of `col,row` cells held
+back for editorial within an otherwise sellable page).
+
+**Ad Placement** (autoname `PL-.#####`): `issue`, `page_no`, `col`,
+`row`, `col_span`, `row_span`, `capture` (Link Ad Capture),
+`state` (`Hold\nConfirmed\nCancelled`), `hold_expires_at` (Datetime).
+The placement IS the inventory record: grid rectangles of non-Cancelled
+placements may never overlap (validated on save; the whole grid is at
+most ~32 cells/page, so validation is a trivial scan).
+
+### 4.2 Booking flow (built into the field capture)
+
+1. Agent opens capture → picks the issue (default: next Open issue) →
+   the unit picker shows **live availability per unit** ("quarter: 3
+   left, half: 1 left, full: sold out") from `get_issue_availability`.
+   Sold-out units render disabled — the agent cannot start a capture
+   that can't be printed.
+2. Picking a unit calls `hold_slot` → a Hold placement at the
+   first-fit position, with a TTL (Settings, default 4h). The hold
+   survives the whole capture + client conversation.
+3. `approve_capture` → placement Confirmed. Rejected/abandoned →
+   Cancelled; the rectangle frees immediately. A scheduler job expires
+   stale Holds every 15 min.
+4. After `sales_deadline` or when the issue is Layout Locked, holds
+   are refused with a clear error.
+
+Two agents racing for the last half page: `hold_slot` is atomic
+(placement insert + overlap validation in one transaction) — the
+second agent gets `sold_out` plus the nearest available alternatives
+(smaller units that still fit, or the next issue).
+
+Offline reality (Flutter): holds require the server. Offline, the app
+shows last-synced availability marked "unconfirmed" and lets capture
+proceed; the hold is attempted at sync, and a failed hold flags the
+capture for re-negotiation instead of silently overselling. Honest
+state over false certainty.
+
+### 4.3 The flatplan (back office)
+
+`get_issue_map(issue)` returns every page's grid with its placements
+(position, span, state, advertiser, rendered thumbnail). The Next.js
+studio gets `/studio/issues/[id]`: the classic newspaper flatplan —
+pages side by side, ads drawn on their grids, color-coded Hold vs
+Confirmed, drag to reposition (same-size moves only, until Layout
+Locked; unit size never changes after confirmation). "Export issue"
+downloads every confirmed ad's SVG/PNG named by page/position, ready
+for the page-assembly tool.
+
+Availability math note: first-fit placement at hold time can fragment
+pages (a later big unit may not fit although enough total cells
+remain). The flatplan's drag-repositioning is the human defrag tool;
+`get_issue_availability` also returns a `fragmented: true` hint per
+unit when a repack (ignoring positions, keeping sizes) would fit one
+more of that unit but current positions don't — so the desk knows
+shuffling would open a slot before turning a sale away.
+
+### 4.4 Sales visibility
+
+Standard Frappe reports over Ad Placement / Ad Capture give the desk:
+sold vs available per unit per issue, revenue to date (unit prices),
+holds outstanding and expiring, per-agent sales counts. A small
+`/studio/issues` index lists open issues with fill % and deadline
+countdown.
+
+## 5. API (extends v1's §5)
 
 | Method | Args | Behavior |
 |---|---|---|
@@ -186,8 +268,11 @@ that's correct for photographs.
 | `rerender_capture` | capture, fields_json/items patch | edit-in-the-field = change the inputs and re-render (sub-second). This replaces any need for an SVG editor on the tablet. |
 | `approve_capture` | capture | as v1 |
 | `list_units` | publication | units with computed px sizes + prices, for the picker |
+| `get_issue_availability` | issue | per unit: `{available, sold, held, fragmented}` via first-fit placement against current placements (§4) |
+| `hold_slot` | issue, ad_unit | atomic Hold placement or `sold_out` error with alternatives; TTL from Settings |
+| `get_issue_map` | issue | full flatplan data for the studio board |
 
-## 5. Flutter field app (the second frontend)
+## 6. Flutter field app (the second frontend)
 
 Separate codebase from the Next.js studio; same Frappe API.
 
@@ -217,14 +302,14 @@ Separate codebase from the Next.js studio; same Frappe API.
   it's what a field agent actually wants. The full guardrailed SVG
   editor remains a studio (Next.js) feature for the back office.
 
-## 6. What stays out of AI generation
+## 7. What stays out of AI generation
 
 Both field paths (single and composite) are generation-free. The
 premium AI hero background (v1 §5.4) remains an option for `single`
 ads only, and never blocks the on-the-spot flow: the plain render
 shows first, the hero variant arrives when ready.
 
-## 7. Remaining decisions
+## 8. Remaining decisions
 
 1. **Page geometry**: the real page trim size and DPI of the
    publication, and its column/row grid (fills §2.1; everything else
