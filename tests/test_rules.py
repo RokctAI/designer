@@ -1,7 +1,23 @@
 from designer.engine import ComplianceEngine
 from designer.report import Severity
 from designer.svg import Document, Shape
-from designer.tokens import load_system
+from designer.tokens import load_system, system_from_dict
+
+
+def test_system_from_dict_matches_yaml_schema():
+    system = system_from_dict(
+        {
+            "name": "Acme",
+            "color": {"tokens": {"primary": "#1a56db", "white": "#ffffff"}, "max_colors": 3},
+            "layout": {"grid": 4},
+        }
+    )
+    assert system.name == "Acme"
+    assert [t.name for t in system.colors] == ["primary", "white"]
+    assert system.max_colors == 3
+    assert system.grid == 4
+    # Unspecified sections keep engine defaults.
+    assert system.min_contrast_text == 4.5
 
 
 def build_doc():

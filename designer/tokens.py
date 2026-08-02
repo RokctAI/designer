@@ -105,6 +105,14 @@ def _parse_system(data: dict) -> DesignSystem:
     return system
 
 
+def system_from_dict(data: dict) -> DesignSystem:
+    """Build a DesignSystem from an already-parsed mapping — same schema
+    as the YAML file. This is the integration point for backends that
+    store the design system in a database (e.g. a Frappe DocType) and
+    serialize it to a dict at run time."""
+    return _parse_system(data)
+
+
 def load_system(path: str | Path | None = None) -> DesignSystem:
     """Load a design system YAML. With no path, loads the bundled default."""
     if path is None:

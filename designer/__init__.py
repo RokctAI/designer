@@ -9,7 +9,7 @@ compliance score.
 
 __version__ = "0.1.0"
 
-from designer.tokens import DesignSystem, load_system
+from designer.tokens import DesignSystem, load_system, system_from_dict
 from designer.engine import ComplianceEngine
 from designer.report import Finding, Report, Severity
 
