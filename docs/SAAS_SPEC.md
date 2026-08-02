@@ -12,7 +12,10 @@ score gate are presented to the user with a fix log → user picks one →
 delivered as production-ready SVG.
 
 The engine (this repo) is the heavy lifting and is already built. This
-spec covers only the SaaS shell around it.
+spec covers only the SaaS shell around it. The user-facing Next.js app
+and the prompt-composition layer it drives are specified separately in
+`FRONTEND_SPEC.md` — read both before starting; FRONTEND_SPEC extends
+several DocTypes and API methods defined here.
 
 ---
 
@@ -51,6 +54,8 @@ Module layout inside the app:
 your_app/design_studio/
     __init__.py
     api.py               # whitelisted REST methods (section 4)
+    prompt_builder.py    # compose generation prompts from the design system
+                         #   (see FRONTEND_SPEC.md section 1)
     jobs.py              # background pipeline (section 5)
     providers/
         __init__.py      # get_provider(name) registry
