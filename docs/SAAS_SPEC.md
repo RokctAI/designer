@@ -184,7 +184,20 @@ Naming: autoname `DC-.#####`.
 The `style_suffix` is load-bearing: steering generators toward flat
 vector style is what makes engine output excellent (see section 8).
 
-### 2.5 Design Studio Settings (Single)
+### 2.5 Design Campaign (one brief -> every format)
+
+Naming: autoname `DCAM-.#####`.
+
+| Field | Type | Notes |
+|---|---|---|
+| title | Data | |
+| brief | Small Text | optional; empty = zero-prompt composition |
+| design_system | Link Design System, reqd | |
+| formats | Table -> Design Campaign Format (child: `format` Data validated against engine catalog or a publication's custom units) | e.g. instagram-post + instagram-story + linkedin-banner |
+| master_request | Link Design Request | the 1:1 master generation |
+| status | Select | `Draft\nProcessing\nReady\nFailed` |
+
+### 2.6 Design Studio Settings (Single)
 
 default_provider (Link), default_min_score (95), default_max_attempts
 (3), default_n_colors (6), max_dim (1024), keep_raw_days (Int, 30 —
@@ -284,6 +297,49 @@ Scheduler (`hooks.py` → `scheduler_events`):
   (keep candidate rows and SVGs).
 - daily: mark requests stuck in Processing > 2 h as Failed with
   error_message "worker timeout" (crash recovery).
+
+### Campaign fan-out job (`jobs.process_campaign`)
+
+One brief, one generation spend, every format — visually consistent
+because most formats are derived from the same master artwork:
+
+```python
+def process_campaign(name):
+    camp = frappe.get_doc("Design Campaign", name)
+    # 1. Generate ONE master at 1:1 (largest square the provider offers)
+    #    through the normal request pipeline (regeneration loop included).
+    master = create_and_process_request(camp, format="logo-master-1024")
+    master_doc = best_candidate_svg(master)
+    # 2. Fan out: for each target format decide derive-vs-regenerate.
+    for row in camp.formats:
+        spec = resolve_format(row.format)
+        if aspect_waste(master_doc, spec) <= 0.35:
+            # Pure-CPU derivation: engine format rescale + comply of the
+            # SAME master artwork onto this canvas. Instant, free,
+            # pixel-consistent across the campaign.
+            svg, report = engine_bridge.comply_svg(master_doc, camp_system, format=spec)
+            attach_campaign_candidate(camp, row.format, svg, report)
+        else:
+            # Aspect too different (e.g. square master -> 4:1 banner
+            # letterboxes badly): one extra generation with the same
+            # composed prompt + this format's aspect guidance.
+            create_and_process_request(camp, format=row.format,
+                                       prompt=master.composed_prompt)
+    camp.status = "Ready"
+```
+
+`aspect_waste(master, fmt)` = 1 − (area of the uniformly-scaled master
+on fmt's canvas / fmt's canvas area). The 0.35 threshold is a Settings
+field (`campaign_regen_threshold`). Deriving is always preferred: it
+costs nothing and guarantees consistency; regeneration is the fallback
+for extreme aspect changes, and still shares the composed prompt so the
+palette/style stays aligned (the engine snaps the rest).
+
+API: `create_campaign(brief, formats: list[str], design_system=None)` →
+`{"name"}`; `get_campaign_status(name)` → per-format candidates in the
+same shape as `get_request_status`. Frontend: a campaign board grid
+(`/studio/campaign/[id]`, see FRONTEND_SPEC) showing every format
+filling in live, each opening into the standard guardrailed editor.
 
 ### Provider interface (`providers/base.py`)
 

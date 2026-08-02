@@ -174,6 +174,21 @@ Saves via standard Frappe REST on the Design System DocType.
   warnings.
 - Select button → `select_candidate` → routes to the editor.
 
+**`/studio/campaign/[id]` — campaign board**
+
+One brief fanned out to every chosen format (SAAS_SPEC campaign
+fan-out): a responsive grid of format cards, each filling in live as
+its derivation/regeneration completes — aspect-true previews, score
+badges, per-card "derived from master" or "regenerated" tag. Any card
+opens the standard editor. "Download all" exports a zip via repeated
+`render_png`.
+
+**`/field/*` — tablet capture flow**
+
+Specified separately in `FIELD_ADS_SPEC.md` §6 (field ad capture:
+photos + facts in, finished ad out, on the spot). Shares this app,
+auth, and the editor.
+
 **`/asset/[candidate]` — guardrailed editor**
 
 Load the SVG string + `get_design_system`. Parse the SVG client-side
