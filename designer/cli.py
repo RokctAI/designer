@@ -47,6 +47,19 @@ def _add_vector_args(parser: argparse.ArgumentParser) -> None:
         "--max-dim", type=int, default=1024, metavar="PX",
         help="downscale input so its longest side is at most this (default 1024)",
     )
+    parser.add_argument(
+        "--no-gradients", action="store_true",
+        help="disable gradient reconstruction (banded regions stay flat layers)",
+    )
+    text_group = parser.add_mutually_exclusive_group()
+    text_group.add_argument(
+        "--text", action="store_true",
+        help="force OCR text extraction (error if tesseract is missing)",
+    )
+    text_group.add_argument(
+        "--no-text", action="store_true",
+        help="disable OCR text extraction (text stays as vector outlines)",
+    )
 
 
 def _vector_options(args: argparse.Namespace) -> VectorizeOptions:
@@ -56,6 +69,8 @@ def _vector_options(args: argparse.Namespace) -> VectorizeOptions:
         smooth=not args.no_smooth,
         corner_angle=args.corner_angle,
         max_dim=args.max_dim,
+        detect_gradients=not args.no_gradients,
+        extract_text=True if args.text else (False if args.no_text else None),
     )
 
 

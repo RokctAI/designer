@@ -98,7 +98,8 @@ Naming: `field:system_name`.
 | min_contrast_text | Float | 4.5 |
 | min_contrast_large_text | Float | 3.0 |
 | large_text_size | Float | 24 |
-| gradients_json | Long Text | stored but NOT yet enforced — see section 8 |
+| gradient_allowed | Check | default 1; 0 flattens all gradients to tokens |
+| gradient_max_stops | Int | 4 |
 
 Child **Design Color Token**: `token_name` (Data, reqd), `hex` (Data,
 reqd — validate `^#[0-9a-fA-F]{6}$` on save), `role` (Select:
@@ -346,8 +347,8 @@ accessibility:
 | Capability | Today | Product handling |
 |---|---|---|
 | Flat/solid-color artwork (logos, icons, flat posters, banners, stickers, social cards) | **Excellent** — this is the core competency | default mode |
-| Gradients | **Flattened**: a gradient becomes 2–6 posterized solid bands, each snapped to a token | (a) style_suffix steers generators away from gradients; (b) store `gradients_json` on Design System now; engine roadmap emits real SVG `<linearGradient>` with token-snapped stops later — no DocType change needed then |
-| Text in generated images | becomes vector **outlines** (correct shape, not editable, font rules can't apply) | until engine OCR lands, recommend prompts without embedded copy; overlay real `<text>` post-hoc as a future editor feature |
+| Gradients | **Supported**: banded gradient regions are reconstructed as real SVG `<linearGradient>`/`<radialGradient>`; stops are token-snapped, stop count capped, and gradients can be banned per system (`gradient.allowed: false` flattens them) | expose `gradient_allowed` (Check) and `gradient_max_stops` (Int) on the Design System DocType instead of the earlier `gradients_json` placeholder |
+| Text in generated images | **Supported when tesseract is installed**: OCR lifts the copy out, inpaints the pixels, and re-emits editable `<text>`; typography rules then enforce brand font, type scale and contrast — hallucinated fonts cannot survive | install `tesseract-ocr` in the bench image and `pip install "designer-compliance[ocr]"`; without it the engine silently falls back to outlines |
 | Photographic regions | flattened to color blobs — wrong for photo-heavy work | reject at product level: asset_type list contains only flat-graphic types |
 | Any existing SVG (from any tool) | fully auditable and fixable | powers `audit_upload` / `comply_upload` and CI-style brand gates |
 
@@ -383,9 +384,9 @@ per-team monthly credit counter decremented per provider call; rate
 limits. Accept: provider errors mark slots skipped, never crash
 requests; quota exhaustion returns a clean API error.
 
-**M4 — standards import + engine upgrades.**
-DTCG/Style Dictionary token importer for Design System; adopt engine
-gradient + OCR releases as they land (no schema migration expected).
+**M4 — standards import.**
+DTCG/Style Dictionary token importer for Design System. (Gradient and
+OCR support already landed in the engine and are covered by M0.)
 
 ---
 

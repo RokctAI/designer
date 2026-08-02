@@ -55,11 +55,37 @@ class Shape:
 
 
 @dataclass
+class GradientDef:
+    """A gradient in <defs>, referenced by shapes as fill="url(#id)".
+
+    ``coords`` uses userSpaceOnUse units: x1/y1/x2/y2 for linear,
+    cx/cy/r for radial. ``stops`` are (offset 0..1, css color)."""
+
+    id: str
+    kind: str  # "linear" | "radial"
+    stops: list[tuple[float, str]] = field(default_factory=list)
+    coords: dict[str, float] = field(default_factory=dict)
+
+
+@dataclass
 class Document:
     width: float
     height: float
     shapes: list[Shape] = field(default_factory=list)
+    defs: list[GradientDef] = field(default_factory=list)
     source: str | None = None  # original file path, if any
+
+    def gradient_by_ref(self, paint: str | None) -> GradientDef | None:
+        """Resolve a fill/stroke value like "url(#g0)" to its def."""
+        if not paint:
+            return None
+        m = re.match(r"url\(\s*#([^)\s]+)\s*\)", paint.strip())
+        if not m:
+            return None
+        for g in self.defs:
+            if g.id == m.group(1):
+                return g
+        return None
 
     def background_color(self) -> str | None:
         """Best guess at the canvas background: the first shape that
@@ -161,7 +187,14 @@ def parse_svg(path: str | Path) -> Document:
             for child in element:
                 walk(child, style)
             return
-        if tag in ("defs", "metadata", "title", "desc", "style", "script"):
+        if tag == "defs":
+            for child in element:
+                _parse_gradient(child, doc)
+            return
+        if tag in ("linearGradient", "radialGradient"):
+            _parse_gradient(element, doc)
+            return
+        if tag in ("metadata", "title", "desc", "style", "script"):
             return
         if tag in (
             "path",
@@ -189,6 +222,33 @@ def parse_svg(path: str | Path) -> Document:
     return doc
 
 
+def _parse_gradient(element: ET.Element, doc: Document) -> None:
+    tag = _strip_ns(element.tag)
+    if tag not in ("linearGradient", "radialGradient"):
+        return
+    grad = GradientDef(
+        id=element.get("id", f"grad{len(doc.defs)}"),
+        kind="linear" if tag == "linearGradient" else "radial",
+    )
+    coord_keys = ("x1", "y1", "x2", "y2") if grad.kind == "linear" else ("cx", "cy", "r")
+    for key in coord_keys:
+        raw = element.get(key)
+        if raw is not None:
+            grad.coords[key] = _parse_length(raw, 0.0)
+    for stop in element:
+        if _strip_ns(stop.tag) != "stop":
+            continue
+        raw_offset = stop.get("offset", "0")
+        offset = (
+            float(raw_offset[:-1]) / 100 if raw_offset.endswith("%") else float(raw_offset)
+        )
+        color = stop.get("stop-color")
+        if color is None and stop.get("style"):
+            color = _parse_style_attr(stop.get("style")).get("stop-color")
+        grad.stops.append((offset, color or "#000000"))
+    doc.defs.append(grad)
+
+
 # ------------------------------------------------------------ serializing
 
 
@@ -198,6 +258,16 @@ def serialize(doc: Document, pretty: bool = True) -> str:
             ns=SVG_NS, w=doc.width, h=doc.height
         )
     ]
+    if doc.defs:
+        lines.append("  <defs>")
+        for grad in doc.defs:
+            tag = "linearGradient" if grad.kind == "linear" else "radialGradient"
+            coords = " ".join(f'{k}="{v:.2f}"' for k, v in grad.coords.items())
+            lines.append(f'    <{tag} id="{grad.id}" gradientUnits="userSpaceOnUse" {coords}>')
+            for offset, color in grad.stops:
+                lines.append(f'      <stop offset="{offset:.3f}" stop-color="{color}"/>')
+            lines.append(f"    </{tag}>")
+        lines.append("  </defs>")
     for shape in doc.shapes:
         attrs = " ".join(
             f'{k}="{_escape(v)}"' for k, v in shape.attrs.items() if v is not None

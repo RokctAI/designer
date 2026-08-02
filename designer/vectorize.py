@@ -18,9 +18,10 @@ from pathlib import Path
 
 import numpy as np
 
-from designer.color import to_hex
+from designer.color import RGB, delta_e, to_hex
+from designer.gradient import GradientCandidate, detect_gradients
 from designer.raster import QuantizedImage, load_image, quantize
-from designer.svg import Document, Shape
+from designer.svg import Document, GradientDef, Shape
 
 Point = tuple[float, float]
 
@@ -32,6 +33,14 @@ class VectorizeOptions:
     smooth: bool = True
     corner_angle: float = 60.0  # degrees of turn above which a vertex stays sharp
     max_dim: int | None = 1024  # downscale input so max(w, h) <= this
+    # Gradient reconstruction: quantize finer internally, then rebuild
+    # banded regions as real SVG gradients instead of posterized layers.
+    detect_gradients: bool = True
+    gradient_bands: int = 12  # internal quantization depth when detecting
+    # OCR text extraction: None = auto (on when tesseract is available).
+    # Detected text is re-emitted as editable <text>, never as outlines.
+    extract_text: bool | None = None
+    min_text_confidence: float = 60.0
 
 
 # ------------------------------------------------------------- tracing
@@ -241,50 +250,152 @@ def loop_to_path(points: list[Point], smooth: bool, corner_angle: float) -> str:
 # ------------------------------------------------------------- assembly
 
 
-def vectorize_quantized(qimg: QuantizedImage, options: VectorizeOptions) -> Document:
+def _merge_flat_groups(
+    qimg: QuantizedImage, indices: list[int], target: int
+) -> list[list[int]]:
+    """Greedily merge flat (non-gradient) layers down to ``target``
+    groups by perceptual closeness. Returns index groups; each group's
+    representative color is its largest member's."""
+    groups = [[i] for i in indices]
+
+    def rep(group: list[int]) -> RGB:
+        biggest = max(group, key=lambda i: qimg.coverage[i])
+        return qimg.palette[biggest]
+
+    while len(groups) > max(1, target):
+        best, best_d = None, float("inf")
+        for a in range(len(groups)):
+            for b in range(a + 1, len(groups)):
+                d = delta_e(rep(groups[a]), rep(groups[b]))
+                if d < best_d:
+                    best_d, best = d, (a, b)
+        a, b = best  # type: ignore[misc]
+        groups[a].extend(groups.pop(b))
+    return groups
+
+
+def _trace_shape(
+    mask: np.ndarray, fill: str, options: VectorizeOptions
+) -> Shape | None:
+    loops = trace_mask(mask)
+    subpaths = []
+    for loop in loops:
+        pts = simplify_loop(loop, options.simplify_tolerance)
+        if len(pts) < 3:
+            continue
+        subpaths.append(loop_to_path(pts, options.smooth, options.corner_angle))
+    if not subpaths:
+        return None
+    return Shape(
+        tag="path",
+        attrs={"d": " ".join(subpaths), "fill": fill, "fill-rule": "evenodd"},
+    )
+
+
+def vectorize_quantized(
+    qimg: QuantizedImage,
+    options: VectorizeOptions,
+    gradients: list[GradientCandidate] | None = None,
+) -> Document:
+    gradients = gradients or []
     doc = Document(width=float(qimg.width), height=float(qimg.height))
 
-    order = sorted(range(len(qimg.palette)), key=lambda i: -qimg.coverage[i])
-    for rank, idx in enumerate(order):
-        color = to_hex(qimg.palette[idx])
-        # The dominant layer is the canvas background: a full-bleed rect
-        # renders cleanly and gives the auditor an explicit background.
-        if rank == 0 and qimg.coverage[idx] >= 0.25:
-            doc.shapes.append(
-                Shape(
-                    tag="rect",
-                    attrs={
-                        "x": "0",
-                        "y": "0",
-                        "width": f"{qimg.width:g}",
-                        "height": f"{qimg.height:g}",
-                        "fill": color,
-                    },
+    consumed = {i for g in gradients for i in g.layer_indices}
+    flat_indices = [i for i in range(len(qimg.palette)) if i not in consumed]
+    flat_target = max(1, options.n_colors - len(gradients)) if flat_indices else 0
+    flat_groups = _merge_flat_groups(qimg, flat_indices, flat_target)
+
+    # One paint entry per flat group / gradient, painted large-to-small.
+    entries: list[tuple[float, str, object]] = []
+    for group in flat_groups:
+        coverage = sum(qimg.coverage[i] for i in group)
+        entries.append((coverage, "flat", group))
+    for grad in gradients:
+        entries.append((grad.coverage, "gradient", grad))
+    entries.sort(key=lambda e: -e[0])
+
+    for rank, (coverage, kind, payload) in enumerate(entries):
+        if kind == "flat":
+            group: list[int] = payload  # type: ignore[assignment]
+            biggest = max(group, key=lambda i: qimg.coverage[i])
+            color = to_hex(qimg.palette[biggest])
+            # The dominant flat layer is the canvas background: a
+            # full-bleed rect renders cleanly and gives the auditor an
+            # explicit background.
+            if rank == 0 and coverage >= 0.25:
+                doc.shapes.append(
+                    Shape(
+                        tag="rect",
+                        attrs={
+                            "x": "0",
+                            "y": "0",
+                            "width": f"{qimg.width:g}",
+                            "height": f"{qimg.height:g}",
+                            "fill": color,
+                        },
+                    )
                 )
-            )
-            continue
-        mask = qimg.layer_mask(idx)
-        loops = trace_mask(mask)
-        subpaths = []
-        for loop in loops:
-            pts = simplify_loop(loop, options.simplify_tolerance)
-            if len(pts) < 3:
                 continue
-            subpaths.append(loop_to_path(pts, options.smooth, options.corner_angle))
-        if subpaths:
-            doc.shapes.append(
-                Shape(
-                    tag="path",
-                    attrs={"d": " ".join(subpaths), "fill": color, "fill-rule": "evenodd"},
+            mask = np.isin(qimg.labels, group)
+            shape = _trace_shape(mask, color, options)
+            if shape:
+                doc.shapes.append(shape)
+        else:
+            grad: GradientCandidate = payload  # type: ignore[assignment]
+            gid = f"grad{len(doc.defs)}"
+            doc.defs.append(
+                GradientDef(
+                    id=gid,
+                    kind=grad.kind,
+                    stops=[(t, to_hex(c)) for t, c in grad.stops],
+                    coords=dict(grad.coords),
                 )
             )
+            mask = np.isin(qimg.labels, grad.layer_indices)
+            shape = _trace_shape(mask, f"url(#{gid})", options)
+            if shape:
+                doc.shapes.append(shape)
+            else:
+                doc.defs.pop()
     return doc
 
 
 def vectorize_file(path: str | Path, options: VectorizeOptions | None = None) -> Document:
     options = options or VectorizeOptions()
     img = load_image(path, max_dim=options.max_dim)
-    qimg = quantize(img, n_colors=options.n_colors)
-    doc = vectorize_quantized(qimg, options)
+
+    spans = []
+    want_text = options.extract_text
+    if want_text is None:
+        from designer.text import ocr_available
+
+        want_text = ocr_available()
+    if want_text:
+        from designer.text import extract_text
+
+        img, spans = extract_text(img, options.min_text_confidence)
+
+    internal_colors = (
+        max(options.n_colors, options.gradient_bands)
+        if options.detect_gradients
+        else options.n_colors
+    )
+    qimg = quantize(img, n_colors=internal_colors)
+    gradients = detect_gradients(qimg) if options.detect_gradients else []
+    doc = vectorize_quantized(qimg, options, gradients)
+
+    for span in spans:
+        doc.shapes.append(
+            Shape(
+                tag="text",
+                attrs={
+                    "x": f"{span.x:g}",
+                    "y": f"{span.y:g}",
+                    "font-size": f"{span.font_size:g}",
+                    "fill": to_hex(span.color),
+                },
+                text=span.text,
+            )
+        )
     doc.source = str(path)
     return doc

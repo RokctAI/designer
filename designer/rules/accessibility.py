@@ -18,6 +18,14 @@ class ContrastRule(Rule):
         bg_raw = doc.background_color()
         background = parse_color(bg_raw) if bg_raw else None
         if background is None:
+            # A gradient background still gives a usable baseline: its
+            # perceptual mean color.
+            grad = doc.gradient_by_ref(bg_raw)
+            if grad is not None:
+                from designer.rules.color_rules import gradient_mean_color
+
+                background = gradient_mean_color(grad)
+        if background is None:
             return findings  # no reliable background to measure against
 
         for i, shape in enumerate(doc.shapes):

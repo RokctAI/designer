@@ -1,0 +1,36 @@
+Design system : Default
+Target        : examples/ai_poster.png
+Compliance    : 100.0/100  (14 auto-fixed, 0 open)
+
+  FIXED   color.palette [shape 1]: fill #faa51e is not a brand token (nearest: accent #f59e0b, distance 0.019)
+          -> snapped fill to token 'accent' (#f59e0b)
+  FIXED   color.palette [shape 2]: fill #f4f5f9 is not a brand token (nearest: surface #f3f4f6, distance 0.004)
+          -> snapped fill to token 'surface' (#f3f4f6)
+  FIXED   color.gradient [shape 0]: gradient 'grad0' stop 0 color #0f1425 is not a brand token (nearest: ink #111827, distance 0.015)
+          -> snapped stop 0 to token 'ink'
+  FIXED   color.gradient [shape 0]: gradient 'grad0' stop 1 color #131e3c is not a brand token (nearest: ink #111827, distance 0.043)
+          -> snapped stop 1 to token 'ink'
+  FIXED   color.gradient [shape 0]: gradient 'grad0' stop 2 color #162a57 is not a brand token (nearest: primary-dark #1e3a8a, distance 0.098)
+          -> snapped stop 2 to token 'primary-dark'
+  FIXED   color.gradient [shape 0]: gradient 'grad0' stop 3 color #18366f is not a brand token (nearest: primary-dark #1e3a8a, distance 0.048)
+          -> snapped stop 3 to token 'primary-dark'
+  FIXED   color.gradient [shape 0]: gradient 'grad0' stop 4 color #1b3f84 is not a brand token (nearest: primary-dark #1e3a8a, distance 0.017)
+          -> snapped stop 4 to token 'primary-dark'
+  FIXED   color.gradient [shape 0]: gradient 'grad0' stop 5 color #1d469a is not a brand token (nearest: primary-dark #1e3a8a, distance 0.040)
+          -> snapped stop 5 to token 'primary-dark'
+  FIXED   color.gradient [shape 0]: gradient 'grad0' stop 6 color #2454b4 is not a brand token (nearest: primary #1a56db, distance 0.061)
+          -> snapped stop 6 to token 'primary'
+  FIXED   color.gradient [shape 0]: gradient 'grad0' stop 7 color #285ecf is not a brand token (nearest: primary #1a56db, distance 0.029)
+          -> snapped stop 7 to token 'primary'
+  FIXED   color.gradient [shape 0]: gradient 'grad0' has 8 stops; system allows 4
+          -> reduced to 4 stops
+  FIXED   layout.grid [shape 2]: <text> off the 8px grid: x=52, y=464.4
+          -> x: 52 -> 48, y: 464.4 -> 464
+  FIXED   type.font [shape 2]: text has no font-family; renderer default is not brand-controlled
+          -> set font-family to 'Inter'
+  FIXED   type.scale [shape 2]: font-size 59.7 is off the type scale ['12', '14', '16', '20', '24', '32', '48', '64'] (nearest: 64)
+          -> font-size 59.7 -> 64
+
+Score before fixes : 67.0/100
+Score after fixes  : 100.0/100
+Wrote examples/ai_poster.compliant.svg

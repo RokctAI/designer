@@ -17,6 +17,12 @@ color:
   # OKLab distance beyond which a snap-to-token is flagged as aggressive.
   snap_warning_distance: 0.18
 
+gradient:
+  # Whether deliverables may contain gradients at all. When false,
+  # detected gradients are flattened to the nearest token.
+  allowed: true
+  max_stops: 4
+
 typography:
   fonts:
     - Inter

@@ -36,6 +36,9 @@ class DesignSystem:
     # from every token, snapping is reported as an aggressive change.
     snap_warning_distance: float = 0.18
 
+    gradients_allowed: bool = True
+    gradient_max_stops: int = 4
+
     fonts: list[str] = field(default_factory=lambda: ["Inter", "sans-serif"])
     type_scale: list[float] = field(default_factory=lambda: [12, 14, 16, 20, 24, 32, 48, 64])
 
@@ -72,6 +75,10 @@ def _parse_system(data: dict) -> DesignSystem:
     system.snap_warning_distance = float(
         color_cfg.get("snap_warning_distance", system.snap_warning_distance)
     )
+
+    gradient_cfg = data.get("gradient", {}) or {}
+    system.gradients_allowed = bool(gradient_cfg.get("allowed", system.gradients_allowed))
+    system.gradient_max_stops = int(gradient_cfg.get("max_stops", system.gradient_max_stops))
 
     type_cfg = data.get("typography", {}) or {}
     if "fonts" in type_cfg:

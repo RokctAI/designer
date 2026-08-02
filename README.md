@@ -20,6 +20,17 @@ AI image  ──►  vectorize  ──►  audit against design system  ──�
   (Douglas–Peucker) and fits smooth Bézier curves while preserving sharp
   corners. Output is resolution-independent SVG with no external tracer
   needed.
+- **Gradient reconstruction.** Smooth gradients quantize into stacks of
+  color bands; instead of shipping that posterization, the engine
+  detects band chains whose colors form a ramp in OKLab, classifies
+  them linear or radial from their spatial arrangement, and emits one
+  shape filled with a real SVG `<linearGradient>`/`<radialGradient>` —
+  whose stops are then token-snapped like any other color.
+- **Text extraction (OCR).** Generators hallucinate typography. With
+  tesseract installed, text is OCR'd out of the raster, its pixels are
+  inpainted away, and the copy is re-emitted as real, editable SVG
+  `<text>` — which the typography rules force into the brand font, type
+  scale and contrast. The hallucinated font never survives; the words do.
 - **Design system as data.** Your standard lives in a YAML file: brand
   color tokens, color cap, font whitelist, modular type scale, spacing
   grid, stroke-width scale, WCAG contrast minimums. The engine enforces
@@ -37,6 +48,8 @@ AI image  ──►  vectorize  ──►  audit against design system  ──�
 
 ```bash
 pip install -e .
+# with OCR text extraction (also needs the tesseract binary):
+#   apt-get install tesseract-ocr && pip install -e ".[ocr]"
 ```
 
 ## Quickstart
@@ -75,6 +88,9 @@ color:
 typography:
   fonts: [Inter, Helvetica Neue, sans-serif]
   scale: [12, 14, 16, 20, 24, 32, 48, 64]
+gradient:
+  allowed: true              # false = gradients get flattened to a token
+  max_stops: 4
 layout:
   grid: 8                    # spacing grid (px)
   min_element_size: 4        # anything smaller is noise -> removed
@@ -91,7 +107,8 @@ accessibility:
 | Rule | Enforces | Auto-fix |
 |---|---|---|
 | `color.palette` | every fill/stroke is a brand token | snap to nearest token (OKLab) |
-| `color.max` | distinct colors ≤ cap | merge least-used into nearest kept |
+| `color.gradient` | gradients allowed? stops are tokens; stop count ≤ cap | snap/thin stops, or flatten to a token |
+| `color.max` | distinct colors ≤ cap (gradient stops included) | merge least-used into nearest kept |
 | `layout.grid` | primitives sit on the spacing grid | round to grid |
 | `layout.min-size` | no sub-minimum specks | remove |
 | `stroke.width` | widths from the stroke scale | snap to nearest |
@@ -122,10 +139,8 @@ Today the engine covers the production half of a junior designer's job:
 take generated art, make it clean, on-brand, accessible and delivery-ready,
 deterministically and at scale. The roadmap toward senior-level scope:
 
-- text detection/OCR in rasters so headlines become real `<text>` (editable,
-  font-enforced) instead of outlines;
 - layout intelligence (alignment, optical spacing, hierarchy scoring);
-- gradient and photo-region handling alongside flat vector layers;
+- photo-region handling (detect and embed, or reject) alongside vector layers;
 - brand-system linting for whole campaigns (cross-deliverable consistency);
 - a feedback loop that turns audit findings into regeneration prompts.
 

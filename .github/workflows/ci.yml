@@ -16,7 +16,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install tesseract (OCR tests)
+        run: sudo apt-get update && sudo apt-get install -y tesseract-ocr
       - name: Install
-        run: pip install -e . pytest
+        run: pip install -e ".[ocr]" pytest
       - name: Test
         run: python -m pytest tests/ -q

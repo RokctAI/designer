@@ -15,6 +15,10 @@ dependencies = [
     "PyYAML>=6.0",
 ]
 
+[project.optional-dependencies]
+# Text extraction from rasters (also requires the tesseract-ocr binary).
+ocr = ["pytesseract>=0.3.10"]
+
 [project.scripts]
 designer = "designer.cli:main"
 
