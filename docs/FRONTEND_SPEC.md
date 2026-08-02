@@ -183,11 +183,12 @@ badges, per-card "derived from master" or "regenerated" tag. Any card
 opens the standard editor. "Download all" exports a zip via repeated
 `render_png`.
 
-**`/field/*` — tablet capture flow**
-
-Specified separately in `FIELD_ADS_SPEC.md` §6 (field ad capture:
-photos + facts in, finished ad out, on the spot). Shares this app,
-auth, and the editor.
+**Field capture is NOT in this app.** The field ad flow is a separate
+**Flutter** tablet app (camera-native, offline queue) specified in
+`FIELD_ADS_SPEC.md` §5, talking to the same Frappe API. This Next.js
+studio remains the back office: design systems, generation, campaign
+board, and the full SVG editor (including touch-ups on field-captured
+ads when needed).
 
 **`/asset/[candidate]` — guardrailed editor**
 

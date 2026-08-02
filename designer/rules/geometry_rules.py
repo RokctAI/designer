@@ -17,6 +17,7 @@ _GRID_ATTRS = {
     "ellipse": ("cx", "cy", "rx", "ry"),
     "line": ("x1", "y1", "x2", "y2"),
     "text": ("x", "y"),
+    "image": ("x", "y", "width", "height"),
 }
 
 

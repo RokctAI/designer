@@ -1,184 +1,236 @@
-# Field Ads — Capture-to-Ad Spec (proposal)
+# Field Ads — Capture-to-Ad Spec (v2)
 
 Third companion spec (with `SAAS_SPEC.md` and `FRONTEND_SPEC.md`).
-Status: **v1 proposal** — the architecture is settled; the items in §7
-are product decisions to confirm before building.
+v2 incorporates the publisher's decisions:
 
-## 1. The use case
+- Ad units span **full page down to very small**, defined as fractions
+  of the publication's own page grid (single publication to start).
+- **Palette is optional and selectable** — many signboards have no
+  logo or brand colors; the agent can extract from a photo, pick
+  colors manually, or use the publication's neutral ad scheme.
+- The field app is a **second frontend in Flutter** (tablet-first,
+  camera-native, offline-tolerant). Next.js keeps the studio; the
+  Frappe API serves both identically.
+- **Composite block ads** are first-class: a retail ad built cell by
+  cell (product photo + name + price + SAVE/SPECIAL badge), captured
+  item-by-item in the field.
+- **Logo policy by size**: small units drop the logo rather than
+  compromise the text; declared per slot, enforced by the renderer.
 
-A publication (newsletter with ads, newspaper-style) sends any employee
-into the field with a tablet. At a client's premises they:
+Engine support note: the engine parses, grid-snaps and format-rescales
+`<image>` elements (product photos embedded in the SVG) while treating
+their pixel content as opaque — this landed with this spec revision.
 
-1. photograph the storefront / sign / logo / products,
-2. type or dictate a handful of facts (business name, offer, price,
-   phone/WhatsApp, address),
-3. pick an ad unit (quarter page, eighth, strip…),
+## 1. Use cases
 
-…and a **finished, designed ad appears on the tablet in seconds** — in
-the publication's design system, using the client's own brand colors
-lifted from the photos. The sale closes on the spot because the client
-is looking at their ad, not imagining it.
+**Single-advertiser ad** (v1 core): agent photographs the client's
+signboard/logo, captures a handful of facts, picks a unit + template,
+and shows the finished ad on the tablet in seconds. No AI generation on
+this path — template fill + compliance is what makes it look designed,
+and sub-second render is what closes the sale on the spot.
 
-## 2. Why this works without AI generation
+**Composite retail ad** (the supermarket case): one advertiser, many
+products. The agent walks the aisles in a loop — *photo → name → price
+→ badge → next* — taps Done, and sees the full ad assembled: a grid of
+product blocks flowing into the chosen unit, publication typography and
+spacing enforced on every cell.
 
-The on-the-spot path is **template-fill, not image generation**:
+## 2. DocTypes
 
-- No generation latency (seconds vs sub-second) and no per-ad API cost
-  — the unit economics of "any employee can sell ads" depend on this.
-- Deterministic output — the field agent always gets a sellable result,
-  never a weird generation.
-- The "designed" look comes from the compliance engine, which is
-  already built: publication fonts, grid, safe margins, WCAG contrast,
-  and per-unit minimum text size are enforced on the filled template.
+### 2.1 Publication (the newsletter and its page geometry)
 
-AI generation stays available as an upsell (§5.4: premium hero
-backgrounds), where latency and cost are acceptable.
+| Field | Type | Notes |
+|---|---|---|
+| publication_name | Data, reqd | |
+| design_system | Link Design System, reqd | governs every ad: fonts, grid, contrast |
+| page_width_px / page_height_px | Int | the full-page canvas (fill with the real page trim at the chosen DPI — see §7.1) |
+| columns / rows | Int | the page's ad grid (e.g. 4 x 8 slots) |
+| gutter_px | Int | spacing between grid cells |
+| units | Table -> Publication Ad Unit | |
 
-Everything below is Frappe-module + frontend work. The engine needs
-**zero changes**: custom ad units are `FormatSpec` instances built at
-runtime (the engine accepts specs, not just catalog names), palette
-extraction and logo vectorization are existing engine calls, and the
-filled template is complied like any other SVG.
+**Publication Ad Unit** (child): `unit_name`, `col_span`, `row_span`,
+`price` (Currency, optional). Pixel size is **computed** from the page
+grid: `w = col_span * col_w + (col_span-1) * gutter` (same for rows) —
+so "full page", "double page spread" (col_span = 2 x columns, built on
+a doubled-width canvas), "half", "quarter", "eighth", down to a 1x1
+classified block all come from the same grid, and resizing the page
+re-derives every unit. At runtime each unit becomes
+`FormatSpec(unit_name, w, h, "print", margin, min_text_size)`; margin
+and min_text_size default from Settings and can be overridden per unit
+(small units need proportionally larger minimum text).
 
-## 3. DocTypes
-
-### 3.1 Advertiser (the client — captured once, reused every issue)
+### 2.2 Advertiser (captured once, reused every issue)
 
 | Field | Type | Notes |
 |---|---|---|
 | advertiser_name | Data, reqd | |
 | contact_* | Data | phone, whatsapp, email, address |
-| photos | Table -> Advertiser Photo (`image` Attach, `kind` Select: storefront/logo/product/other) | |
-| palette | Table -> Design Color Token (reuse child) | extracted via `extract_palette` from photos; agent can re-order/trim on the tablet |
-| logo_svg | Attach | engine-vectorized + complied from the logo photo |
-| default_offer_fields | JSON | last-used field values, pre-filled next visit |
-| owner_team | Link | tenancy anchor, as elsewhere |
+| photos | Table -> Advertiser Photo (`image` Attach, `kind` Select: signboard/logo/product/other) | all optional |
+| palette | Table -> Design Color Token | **optional**; see palette sources below |
+| palette_source | Select | `extracted\nmanual\npublication-default` |
+| logo_svg | Attach | optional; engine-vectorized from a logo photo when one exists |
 
-### 3.2 Publication + Ad Unit (the newsletter and its slots)
+Palette sources (agent chooses on the tablet, in this order of
+preference):
 
-**Publication**: `publication_name`, `design_system` (Link — the
-publication's own system: fonts, grid, contrast; this governs every ad),
-`units` (Table -> Publication Ad Unit).
+1. **extracted** — `extract_palette` on a photo; agent confirms/trims.
+2. **manual** — color picker; the UI offers the publication's curated
+   accent palette first, full picker behind it. For signboards with no
+   usable colors this is the normal path, not the fallback.
+3. **publication-default** — skip color capture entirely; the ad
+   renders in the publication's neutral ad scheme. Zero-friction path.
 
-**Publication Ad Unit** (child): `unit_name` (e.g. "quarter-page"),
-`width_px`, `height_px`, `margin` (Float, fraction), `min_text_size`
-(Float), `price` (Currency, optional — enables on-the-spot quoting).
-At runtime: `FormatSpec(unit_name, width_px, height_px, "print",
-margin, min_text_size)` — passed straight to `ComplianceEngine`.
+Whatever the source, the tokens flow into template `data-token` slots
+identically, and the compliance pass enforces contrast on the result —
+a manually-picked yellow behind white text gets corrected exactly like
+an extracted one.
 
-### 3.3 Ad Template
+### 2.3 Ad Template
 
 | Field | Type | Notes |
 |---|---|---|
 | template_name | Data | |
-| publication | Link Publication | |
-| compatible_units | Data | CSV of unit names this layout fits |
-| svg_template | Attach | SVG with slot markers (§4) |
-| preview | Attach | thumbnail for the picker |
+| publication | Link | |
+| compatible_units | Data | CSV of unit names |
+| kind | Select | `single\ncomposite` |
+| svg_template | Attach | slot-marked SVG (§3) |
+| cell_template | Attach | composite only: the per-product block SVG |
+| preview | Attach | thumbnail |
 
-### 3.4 Ad Capture (one field visit -> one ad)
+Ship four default `single` layouts (logo-left, logo-top, text-only,
+photo card) and two `composite` layouts (blocks-with-header,
+blocks-edge-to-edge) so the system works before any designer touches it.
+
+### 2.4 Ad Capture (one field visit -> one ad)
+
+As v1, plus composite items:
 
 | Field | Type | Notes |
 |---|---|---|
-| advertiser | Link Advertiser, reqd | created inline on first visit |
-| publication / ad_unit / template | Links | |
-| fields_json | JSON | slot values: headline, offer, price, contact… |
+| advertiser / publication / ad_unit / template | Links | |
+| fields_json | JSON | headline, offer, contact... (single kind) |
+| items | Table -> Ad Capture Item | composite kind |
 | status | Select | `Captured\nRendered\nApproved\nRejected\nPublished` |
-| rendered_svg | Attach | the complied ad |
-| score / report_json | Float / Long Text | engine audit, as everywhere else |
-| captured_by | Link User | the field agent |
-| approved_at | Datetime | client said yes, on the spot |
+| rendered_svg / score / report_json | | as everywhere |
+| captured_by / approved_at | | |
 
-## 4. Template model (SVG + slot markers)
+**Ad Capture Item** (child): `photo` (Attach), `title` (Data), `price`
+(Data — keep as text: "R29.99", "2 for R30"), `badge` (Select:
+`none\nsave\nspecial\nnew`), `sort_order` (Int).
 
-A template is a valid SVG (so designers can author it in any tool)
-whose slot elements carry `data-slot` / `data-token` attributes:
+## 3. Template model
+
+### 3.1 Slot markers (as v1)
+
+`data-slot` (logo/headline/offer/body/contact/photo), `data-token`
+(palette-mapped fills), `data-fit="shrink"` (PIL font-metric fitting
+down the type scale until the text fits the slot box).
+
+### 3.2 Size-responsive slots (the logo policy)
 
 ```xml
-<rect data-token="advertiser-primary" .../>   <!-- fill replaced by advertiser palette -->
-<image data-slot="logo" x=".." y=".." width=".." height=".."/>
-<text data-slot="headline" data-fit="shrink" x=".." y=".." font-size="32"/>
-<text data-slot="offer"    data-fit="shrink" .../>
-<text data-slot="contact"  .../>
+<image data-slot="logo" data-optional="true" data-min-unit-width="400"
+       data-freed-to="headline" .../>
 ```
 
-Fill algorithm (`field_ads/renderer.py` in the module):
+- `data-optional="true"` + `data-min-unit-width` — the renderer drops
+  this slot entirely when the target unit's width is below the
+  threshold. Small ads lose the logo; the text never shrinks to make
+  room for it.
+- `data-freed-to="<slot>"` — when dropped, the named slot's box is
+  extended to absorb the freed rectangle (union of the two boxes), so
+  the headline gets the space. No general reflow in v1 — one declared
+  beneficiary per optional slot.
+- Same mechanism works for any slot (e.g. drop the photo in a 1x1
+  classified block, keep name + price + phone).
 
-1. Parse with the engine's `parse_svg` (slot attrs survive as plain
-   attributes on the Shape model).
-2. `data-token="advertiser-*"` fills → the advertiser's extracted
-   palette (position 1 = primary, 2 = secondary…). Every replacement is
-   then subject to the publication system's contrast rules in step 5 —
-   an advertiser color that fails contrast gets recolored by the
-   engine, exactly like any other violation.
-3. `data-slot="logo"` → inline the advertiser's vectorized `logo_svg`
-   scaled into the slot box.
-4. Text slots → fill from `fields_json`. `data-fit="shrink"`: measure
-   the string with PIL `ImageFont.truetype` of the publication's actual
-   font file and walk *down* the type scale until it fits the slot
-   width (real glyph metrics, not estimates — the bench has the font
-   files).
-5. Run `ComplianceEngine(publication_system, format=unit_spec).comply()`
-   on the filled document. This is what makes it look designed: grid,
-   margins, contrast, minimum text size for the unit — enforced, with
-   the fix log stored like every other candidate.
+### 3.3 Composite regions (the supermarket grid)
 
-## 5. Pipeline & API
+The composite template marks one region:
 
-### 5.1 First visit to a client (once per advertiser)
+```xml
+<rect data-region="items" x=".." y=".." width=".." height=".."
+      data-min-cell="140" fill="none"/>
+```
 
-`register_advertiser(name, contact, photos[])` →
-background job: `extract_palette` on the best photo(s); logo photo →
-engine comply with `format="logo"` → `logo_svg`. Returns the palette
-for the agent to confirm/trim on the tablet.
+The cell template is its own slot-marked SVG (photo slot + title +
+price + badge). Renderer algorithm:
 
-### 5.2 The capture (every ad)
+1. N = item count. Choose the column count that best fills the region:
+   `cols = clamp(round(sqrt(N * region_w/region_h)), 1, floor(region_w/min_cell))`,
+   `rows = ceil(N / cols)`; cell = region grid cell minus gutter.
+2. If the resulting cell edge < `data-min-cell`: too many items for
+   this unit — the API returns a structured error naming the smallest
+   unit that fits (the Flutter app offers the upgrade: "12 items needs
+   a half page — switch?"). Never silently shrink below legibility.
+3. For each item (by sort_order): fill the cell template — photo into
+   the photo slot (embedded `<image>`, center-crop to the slot's
+   aspect), title/price with `data-fit="shrink"`, badge slot filled
+   with the badge style (a small token-colored shape + label) or
+   dropped for `none`.
+4. Place cells row-major into the region; last row centers if partial.
+5. Run the publication comply pass (with the unit's FormatSpec) over
+   the assembled document — one pass over the whole ad, cells included.
 
-`render_ad(advertiser, publication, ad_unit, template, fields_json)` →
-runs §4 **synchronously** (template fill + comply is sub-second, no
-queue needed) → returns `{"svg", "score", "report_json", "capture"}`.
-The tablet shows the finished ad immediately.
+Product photos stay raster (`<image>` with attached-file href;
+`render_png` composes them for print output). The engine grid-snaps
+and rescales their geometry but never vectorizes their content —
+that's correct for photographs.
 
-### 5.3 Approval
+## 4. API (extends v1's §5)
 
-`approve_capture(capture)` → status Approved, timestamps. Published
-status is set by the issue-assembly process (out of scope here; the
-rendered SVG is the deliverable this system hands over). The standard
-guardrailed editor (FRONTEND_SPEC §2.2) opens on any rendered ad for
-touch-ups before approval.
+| Method | Args | Behavior |
+|---|---|---|
+| `register_advertiser` | name, contact, photos=[], palette_mode, manual_colors=[] | photos optional; palette per §2.2; logo vectorized only when a logo photo is provided |
+| `render_ad` | advertiser, publication, ad_unit, template, fields_json={}, items=[] | synchronous template fill (§3) + comply; returns `{"svg", "score", "report_json", "capture"}`; structured `unit_too_small` error per §3.3.2 |
+| `rerender_capture` | capture, fields_json/items patch | edit-in-the-field = change the inputs and re-render (sub-second). This replaces any need for an SVG editor on the tablet. |
+| `approve_capture` | capture | as v1 |
+| `list_units` | publication | units with computed px sizes + prices, for the picker |
 
-### 5.4 Premium upsell (optional, not v1-blocking)
+## 5. Flutter field app (the second frontend)
 
-`render_ad(..., hero=True)` additionally runs a generation request
-(prompt composed from the advertiser's palette + business type + offer)
-for a background layer behind the template content, through the normal
-candidate pipeline. Slower and costs a generation — priced accordingly.
+Separate codebase from the Next.js studio; same Frappe API.
 
-## 6. Tablet frontend (extends FRONTEND_SPEC)
+- **Stack**: Flutter (tablet-first, works on phones), `camera` +
+  image picker, `flutter_svg` for ad preview, `drift` (SQLite) for the
+  offline queue, background sync via `workmanager`. Auth: Frappe API
+  key/secret per user, provisioned by QR from the desk.
+- **Capture wizard (single)**: advertiser (search or inline create) →
+  camera (signboard/logo, skippable) → palette step (three source
+  buttons per §2.2) → facts form (5–8 fields, big inputs, voice
+  dictation via platform keyboard) → unit picker (with prices) →
+  template picker (thumbnails) → **Render**.
+- **Capture loop (composite)**: after unit/template selection the app
+  enters the aisle loop: full-screen camera → photo → title/price/badge
+  overlay form → **Next** (repeat) → **Done** → render. Item list is
+  reorderable; items editable before and after render.
+- **Result screen**: the ad full-width (flutter_svg), score badge,
+  "what we enforced" log, **Edit** (reopens the inputs → `rerender_capture`),
+  **Approve** (client taps; capture Approved + timestamp).
+- **Offline**: captures and photos queue locally; render requires the
+  server — queued captures show honestly as "pending render"; sync
+  renders them and notifies. (Client-side rendering via a WASM build of
+  the engine is a noted non-goal for now.)
+- Editing model on the tablet is deliberately **inputs, not SVG**:
+  because template fill is deterministic, editing the inputs and
+  re-rendering is strictly simpler and safer than an SVG editor, and
+  it's what a field agent actually wants. The full guardrailed SVG
+  editor remains a studio (Next.js) feature for the back office.
 
-New route group `/field` in the same Next.js app:
+## 6. What stays out of AI generation
 
-- `/field/capture` — one screen, big controls: advertiser picker
-  (or inline create), camera inputs, the 5–8 text fields, unit picker
-  (with prices), template picker (thumbnails), Render button.
-- Result screen: the ad full-width, score badge, "what we enforced"
-  log, Edit (opens the standard editor), Approve (client taps).
-- Offline tolerance: the capture form and photos queue in IndexedDB
-  and sync when connectivity returns; rendering requires the server —
-  show queued state honestly. (Fully-offline rendering is possible
-  later by compiling the engine to WASM — noted, not planned.)
+Both field paths (single and composite) are generation-free. The
+premium AI hero background (v1 §5.4) remains an option for `single`
+ads only, and never blocks the on-the-spot flow: the plain render
+shows first, the hero variant arrives when ready.
 
-## 7. Open decisions before building
+## 7. Remaining decisions
 
-1. **Ad units**: the real slot dimensions/grid of the newsletter
-   (px at what DPI?), and whether one publication or several.
-2. **Template authoring**: who draws the initial template set — do we
-   spec 3–4 standard layouts (logo-left, logo-top, text-only, photo
-   card) to ship as defaults?
-3. **Approval → billing**: does on-the-spot approval need a price
-   quote + signature/payment hook in the capture flow, or is billing
-   handled elsewhere in the host app?
-4. **Product photos in ads**: v1 ads are vector + text + logo. Placing
-   a *photograph* (not vectorized) into a slot means embedding raster
-   in the SVG — supported by SVG, but the engine treats it as opaque
-   (report-only). Decide if v1 needs photo slots or vector-only.
+1. **Page geometry**: the real page trim size and DPI of the
+   publication, and its column/row grid (fills §2.1; everything else
+   derives from it). Suggested default until confirmed: A4 portrait at
+   150dpi → 1240x1754px, 4 columns x 8 rows, 16px gutter.
+2. **Badge styles**: SAVE / SPECIAL / NEW ship as token-colored
+   pill + bold label; confirm wording set (multilingual?).
+3. **Approval → billing**: unchanged from v1 — hook point exists at
+   `approve_capture`; wiring to quotes/payments lives in the host app.

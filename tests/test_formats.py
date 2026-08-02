@@ -103,6 +103,33 @@ def test_hierarchy_rule_reports_flat_text():
     assert not any(f.rule == "type.hierarchy" for f in report.findings)
 
 
+def test_image_shapes_survive_and_snap(tmp_path):
+    # Product photos embedded as <image> (retail block ads) must round-trip
+    # parsing, grid-snap, and format rescale — the engine treats the pixel
+    # content as opaque but owns the geometry.
+    from designer.svg import parse_svg, save
+
+    doc = Document(width=200, height=200)
+    doc.shapes.append(
+        Shape("rect", {"x": "0", "y": "0", "width": "200", "height": "200",
+                       "fill": "#f3f4f6"})
+    )
+    doc.shapes.append(
+        Shape("image", {"x": "13", "y": "22", "width": "61", "height": "45",
+                        "href": "data:image/png;base64,iVBORw0KGgo="})
+    )
+    out = tmp_path / "img.svg"
+    save(doc, out)
+    reparsed = parse_svg(out)
+    img = next(s for s in reparsed.shapes if s.tag == "image")
+    assert img.attrs["href"].startswith("data:image/png")
+
+    engine = ComplianceEngine(load_system())
+    engine.comply(reparsed)
+    for attr in ("x", "y", "width", "height"):
+        assert img.numeric(attr) % 8 == 0
+
+
 def test_format_comply_is_idempotent():
     engine = ComplianceEngine(load_system(), format="instagram-post")
     doc = poster_doc()

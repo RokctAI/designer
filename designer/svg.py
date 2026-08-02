@@ -205,6 +205,7 @@ def parse_svg(path: str | Path) -> Document:
             "polygon",
             "polyline",
             "text",
+            "image",
         ):
             attrs: dict[str, str] = {}
             for key, value in element.attrib.items():
