@@ -28,7 +28,15 @@ several DocTypes and API methods defined here.
   (or a private PyPI mirror). It is pure Python (Pillow, numpy, PyYAML),
   CPU-only, no GPU, no external binaries.
 - Measured engine cost: ~0.3 s and ~7 MB peak per 512 px job on one CPU
-  core. It runs inline in RQ workers — no subprocess, no microservice.
+  core **for flat artwork** — the input class this product generates and
+  accepts. Photographic or heavily textured inputs would cost tens of
+  seconds and produce multi-megabyte noise, so the engine refuses them:
+  `engine.load` raises `designer.ComplexityError` with a user-facing
+  message. Pipeline handling: mark the candidate/capture failed with
+  that message (do NOT retry — regeneration with the same prompt will
+  hit the same guard only if the generator ignored the flat-style
+  suffix, which IS worth one retry with the style suffix reinforced).
+  It runs inline in RQ workers — no subprocess, no microservice.
 - The only slow/expensive step is the generation provider API call
   (seconds, per-image cost). All sizing decisions follow from that.
 
@@ -237,7 +245,7 @@ Frontend-facing; small models implementing clients need exact shapes.
 
 | Method | Args | Returns |
 |---|---|---|
-| `create_design_request` | prompt, design_system=None, asset_type="Logo", size="1024x1024", n_candidates=2, min_score=None, provider=None | `{"name": "DR-00001"}` — creates doc, sets Queued, enqueues `process_design_request` on queue `long` |
+| `create_design_request` | prompt, design_system=None, format="logo", n_candidates=2, min_score=None, provider=None | `{"name": "DR-00001"}` — creates doc, sets Queued, enqueues `process_design_request` on queue `long`. `format` is the engine format name (§2.2); it determines canvas, margins, min text size and the generation size request. |
 | `get_request_status` | name | `{"status", "error_message", "candidates": [{"name", "slot", "attempt", "score_before", "score_after", "passed", "selected", "svg_url", "raw_url"}]}` |
 | `select_candidate` | candidate | marks selected, request → Delivered; returns `{"svg_url"}` |
 | `comply_upload` | file_url, design_system=None, n_colors=6 | run engine on an **uploaded** PNG/SVG (no generation): creates a Design Request (status Ready, provider none) with one candidate; returns same shape as get_request_status. This endpoint is the product's free-tier hook and works today with zero provider spend. |
@@ -391,6 +399,9 @@ layout:
   min_element_size: 4
 stroke:
   widths: [1, 2, 4, 8]
+gradient:
+  allowed: true
+  max_stops: 4
 accessibility:
   min_contrast_text: 4.5
   min_contrast_large_text: 3.0
@@ -408,7 +419,7 @@ accessibility:
 |---|---|---|
 | Flat/solid-color artwork (logos, icons, flat posters, banners, stickers, social cards) | **Excellent** — this is the core competency | default mode |
 | Gradients | **Supported**: banded gradient regions are reconstructed as real SVG `<linearGradient>`/`<radialGradient>`; stops are token-snapped, stop count capped, and gradients can be banned per system (`gradient.allowed: false` flattens them) | expose `gradient_allowed` (Check) and `gradient_max_stops` (Int) on the Design System DocType instead of the earlier `gradients_json` placeholder |
-| Text in generated images | **Supported when tesseract is installed**: OCR lifts the copy out, inpaints the pixels, and re-emits editable `<text>`; typography rules then enforce brand font, type scale and contrast — hallucinated fonts cannot survive | install `tesseract-ocr` in the bench image and `pip install "designer-compliance[ocr]"`; without it the engine silently falls back to outlines |
+| Text in generated images | **Supported when tesseract is installed**: OCR lifts the copy out, inpaints the pixels, and re-emits editable `<text>`; typography rules then enforce brand font, type scale and contrast. Limits: rotated/arced/heavily stylized headlines are not detected (they remain outlines), busy backgrounds degrade recognition, and non-English needs the matching traineddata plus `ocr_lang` | install `tesseract-ocr` (+ language packs) in EVERY bench image and `pip install "designer-compliance[ocr]"` — when OCR is unavailable the engine falls back to outlines and reports it as an `engine.capability` finding, so output quality differences across workers are visible, not silent |
 | Photographic regions | flattened to color blobs — wrong for photo-heavy work | reject at product level: asset_type list contains only flat-graphic types |
 | Any existing SVG (from any tool) | fully auditable and fixable | powers `audit_upload` / `comply_upload` and CI-style brand gates |
 

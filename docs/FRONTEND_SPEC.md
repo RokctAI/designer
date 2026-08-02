@@ -101,10 +101,17 @@ reproducible and debuggable. `jobs.process_design_request` uses
 | `list_requests` | page, page_size | session user's request history for the studio home. |
 
 Security notes for `save_candidate_edit`: parse with the engine's own
-`parse_svg` (defusable, no script/foreignObject support by design —
-unknown elements are dropped); never store SVG that failed parsing;
-permission check = candidate's request `requested_by` or Design Manager
-role. The engine parser dropping unknown tags is the sanitizer.
+`parse_svg`, which enforces an attribute security policy — event-handler
+attributes (`on*`) are stripped, `href`/`xlink:href` values are limited
+to `data:image/*`, http(s) and relative targets, and `<script>`/
+`<foreignObject>`/unknown elements are dropped (each removal is recorded
+in `doc.warnings` and surfaced by the `engine.capability` rule). That
+policy is necessary but NOT sufficient on its own: also (a) serve
+candidate previews with a restrictive CSP (`script-src 'none'` for the
+preview context, or render inside a sandboxed iframe), (b) never store
+SVG that failed parsing, and (c) permission-check every call
+(candidate's request `requested_by` or Design Manager role). Treat all
+uploaded SVG as untrusted even after sanitization.
 
 ---
 

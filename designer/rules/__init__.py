@@ -6,6 +6,7 @@ from designer.rules.color_rules import PaletteRule, GradientRule, MaxColorsRule
 from designer.rules.geometry_rules import GridSnapRule, MinSizeRule, StrokeWidthRule, TransformRule
 from designer.rules.typography_rules import FontRule, TypeScaleRule
 from designer.rules.accessibility import ContrastRule
+from designer.rules.capability import CapabilityRule
 from designer.rules.format_rules import (
     CanvasFormatRule,
     MinTextSizeRule,
@@ -25,6 +26,7 @@ DEFAULT_RULES: list[Rule] = [
     ContrastRule(),
     TextHierarchyRule(),
     TransformRule(),
+    CapabilityRule(),
 ]
 
 __all__ = [
@@ -44,4 +46,5 @@ __all__ = [
     "SafeMarginRule",
     "MinTextSizeRule",
     "TextHierarchyRule",
+    "CapabilityRule",
 ]

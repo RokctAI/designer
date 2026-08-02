@@ -74,6 +74,11 @@ class Document:
     shapes: list[Shape] = field(default_factory=list)
     defs: list[GradientDef] = field(default_factory=list)
     source: str | None = None  # original file path, if any
+    # Fidelity notes: constructs the parser dropped or flattened, and
+    # pipeline capability gaps (e.g. OCR unavailable). Surfaced as
+    # findings by the engine.capability rule so audits are never
+    # silently blind to what they could not see.
+    warnings: list[str] = field(default_factory=list)
 
     def gradient_by_ref(self, paint: str | None) -> GradientDef | None:
         """Resolve a fill/stroke value like "url(#g0)" to its def."""
@@ -109,28 +114,13 @@ def _shape_area(shape: Shape, doc_w: float, doc_h: float) -> float | None:
             return 3.14159 * r * r
     if shape.tag == "path":
         d = shape.attrs.get("d", "")
-        pts = _path_points(d)
-        if len(pts) >= 3:
-            return abs(_shoelace(pts))
+        try:
+            from designer.path import path_area
+
+            return path_area(d)
+        except ValueError:
+            return None
     return None
-
-
-def _path_points(d: str) -> list[tuple[float, float]]:
-    """Absolute-coordinate vertices of a path (M/L/C endpoints only) —
-    enough for area estimates on the paths this package emits."""
-    nums = [float(n) for n in re.findall(r"-?\d+(?:\.\d+)?(?:e-?\d+)?", d)]
-    pts = list(zip(nums[0::2], nums[1::2]))
-    return pts
-
-
-def _shoelace(pts: list[tuple[float, float]]) -> float:
-    area = 0.0
-    n = len(pts)
-    for i in range(n):
-        x1, y1 = pts[i]
-        x2, y2 = pts[(i + 1) % n]
-        area += x1 * y2 - x2 * y1
-    return area / 2.0
 
 
 def shape_area(shape: Shape, doc: Document) -> float | None:
@@ -174,7 +164,11 @@ def parse_svg(path: str | Path) -> Document:
 
     doc = Document(width=width, height=height, source=str(path))
 
-    def walk(element: ET.Element, inherited: dict[str, str]) -> None:
+    def warn(message: str) -> None:
+        if message not in doc.warnings:
+            doc.warnings.append(message)
+
+    def walk(element: ET.Element, inherited: dict[str, str], parent_transform: str) -> None:
         style = dict(inherited)
         for prop in _STYLE_PROPS:
             if element.get(prop) is not None:
@@ -184,17 +178,44 @@ def parse_svg(path: str | Path) -> Document:
 
         tag = _strip_ns(element.tag)
         if tag in ("g", "svg"):
+            # Group transforms compose onto children so they survive
+            # serialization (the transform rule still flags them as
+            # unevaluated for geometry checks).
+            own = element.get("transform", "")
+            combined = f"{parent_transform} {own}".strip()
             for child in element:
-                walk(child, style)
+                walk(child, style, combined)
             return
         if tag == "defs":
             for child in element:
-                _parse_gradient(child, doc)
+                child_tag = _strip_ns(child.tag)
+                if child_tag in ("linearGradient", "radialGradient"):
+                    _parse_gradient(child, doc)
+                else:
+                    warn(
+                        f"unsupported <defs> content <{child_tag}> dropped — "
+                        "shapes referencing it will render differently"
+                    )
             return
         if tag in ("linearGradient", "radialGradient"):
             _parse_gradient(element, doc)
             return
-        if tag in ("metadata", "title", "desc", "style", "script"):
+        if tag == "style":
+            warn(
+                "CSS <style> block ignored — class-based styling is invisible "
+                "to this audit and may hide off-system colors or fonts"
+            )
+            return
+        if tag == "script":
+            warn("<script> element removed")
+            return
+        if tag in ("use", "symbol", "foreignObject", "clipPath", "mask", "filter", "pattern"):
+            warn(
+                f"unsupported <{tag}> dropped — the rendered result may differ "
+                "from what this audit evaluated"
+            )
+            return
+        if tag in ("metadata", "title", "desc"):
             return
         if tag in (
             "path",
@@ -210,17 +231,48 @@ def parse_svg(path: str | Path) -> Document:
             attrs: dict[str, str] = {}
             for key, value in element.attrib.items():
                 key = _strip_ns(key)
-                if key != "style":
-                    attrs[key] = value
+                if key == "style":
+                    continue
+                if not _safe_attr(key, value):
+                    warn(f"unsafe attribute {key!r} stripped from <{tag}>")
+                    continue
+                attrs[key] = value
             # Inherited/style-attr values win only where the element
             # didn't set its own presentation attribute.
             for prop, value in style.items():
                 attrs.setdefault(prop, value)
-            text_content = "".join(element.itertext()).strip() if tag == "text" else ""
+            if parent_transform:
+                own = attrs.get("transform", "")
+                attrs["transform"] = f"{parent_transform} {own}".strip()
+            text_content = ""
+            if tag == "text":
+                text_content = " ".join("".join(element.itertext()).split())
+                if any(_strip_ns(child.tag) == "tspan" for child in element):
+                    warn(
+                        "multi-span <text> flattened to a single line — "
+                        "line breaks and per-span styling were lost"
+                    )
             doc.shapes.append(Shape(tag=tag, attrs=attrs, text=text_content))
+            return
+        warn(f"unknown element <{tag}> dropped")
 
-    walk(root, {})
+    walk(root, {}, "")
     return doc
+
+
+_SAFE_HREF = re.compile(r"^\s*(data:image/|https?:|/|\.{0,2}/|[\w.\-]+$)", re.IGNORECASE)
+
+
+def _safe_attr(key: str, value: str) -> bool:
+    """Attribute security policy: no event handlers, no scriptable or
+    non-image href targets. Everything the engine writes back out has
+    passed through this filter."""
+    lowered = key.lower()
+    if lowered.startswith("on"):
+        return False
+    if lowered in ("href", "xlink:href"):
+        return bool(_SAFE_HREF.match(value))
+    return True
 
 
 def _parse_gradient(element: ET.Element, doc: Document) -> None:

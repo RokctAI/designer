@@ -64,11 +64,16 @@ class CanvasFormatRule(Rule):
         return [finding]
 
 
+# Average glyph advance as a fraction of font-size, for estimating a
+# text run's width without font metrics. A slight over-estimate on
+# purpose, so margin fixes err toward safety.
+_CHAR_WIDTH_EM = 0.55
+
+
 class SafeMarginRule(Rule):
-    """Text must sit inside the format's safe margin. Fix nudges the
-    anchor point inside; it cannot know rendered text width, so it
-    guarantees the start of the line, which handles the overwhelmingly
-    common failure (text bleeding off an edge)."""
+    """Text must sit inside the format's safe margin. The fix accounts
+    for text-anchor and an estimated line width, so a right-aligned or
+    long line is pulled fully inside — not just its anchor point."""
 
     id = "format.margin"
     description = "Text must respect the format's safe margin"
@@ -81,18 +86,21 @@ class SafeMarginRule(Rule):
         margin = self.spec.margin * min(doc.width, doc.height)
         if margin <= 0:
             return findings
-        def clamp(value: float, hi: float) -> float:
-            out = min(max(value, margin), hi - margin)
+
+        def clamp(value: float, lo: float, hi: float) -> float:
+            if lo > hi:  # text wider than the safe area: center it
+                return (lo + hi) / 2
+            out = min(max(value, lo), hi)
             # Land on the spacing grid inside the safe area, so the
             # grid rule never re-moves what this rule placed.
             grid = system.grid
             if grid > 0 and out != value:
                 snapped = round(out / grid) * grid
-                if snapped < margin:
+                if snapped < lo:
                     snapped += grid
-                if snapped > hi - margin:
+                if snapped > hi:
                     snapped -= grid
-                if margin <= snapped <= hi - margin:
+                if lo <= snapped <= hi:
                     out = snapped
             return out
 
@@ -102,8 +110,20 @@ class SafeMarginRule(Rule):
             x, y = shape.numeric("x"), shape.numeric("y")
             if x is None or y is None:
                 continue
-            nx = clamp(x, doc.width)
-            ny = clamp(y, doc.height)
+            size = shape.numeric("font-size") or 16.0
+            est_width = _CHAR_WIDTH_EM * size * len(shape.text or "")
+            anchor = (shape.get("text-anchor") or "start").strip()
+            # Bounds for the ANCHOR such that the whole estimated line
+            # stays inside the safe area.
+            if anchor == "end":
+                lo_x, hi_x = margin + est_width, doc.width - margin
+            elif anchor == "middle":
+                lo_x = margin + est_width / 2
+                hi_x = doc.width - margin - est_width / 2
+            else:
+                lo_x, hi_x = margin, doc.width - margin - est_width
+            nx = clamp(x, lo_x, hi_x)
+            ny = clamp(y, margin, doc.height - margin)
             if nx == x and ny == y:
                 continue
             finding = Finding(

@@ -49,15 +49,17 @@ def ocr_available() -> bool:
 
 
 def extract_text(
-    img: Image.Image, min_confidence: float = 60.0
+    img: Image.Image, min_confidence: float = 60.0, lang: str = "eng"
 ) -> tuple[Image.Image, list[TextSpan]]:
     """OCR the image; returns (image with text regions painted over,
-    detected spans). The input image is not modified."""
+    detected spans). The input image is not modified. ``lang`` is a
+    tesseract language spec (e.g. "eng+fra"); the matching traineddata
+    must be installed."""
     import pytesseract
 
     rgb = img.convert("RGB")
     data = pytesseract.image_to_data(
-        rgb, config="--psm 11", output_type=pytesseract.Output.DICT
+        rgb, config="--psm 11", lang=lang, output_type=pytesseract.Output.DICT
     )
 
     lines: dict[tuple[int, int, int], list[int]] = {}

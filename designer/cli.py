@@ -17,7 +17,7 @@ from designer.engine import ComplianceEngine
 from designer.formats import all_formats
 from designer.svg import save
 from designer.tokens import load_system
-from designer.vectorize import VectorizeOptions
+from designer.vectorize import ComplexityError, VectorizeOptions
 
 
 def _add_system_arg(parser: argparse.ArgumentParser) -> None:
@@ -69,6 +69,14 @@ def _add_vector_args(parser: argparse.ArgumentParser) -> None:
         "--no-text", action="store_true",
         help="disable OCR text extraction (text stays as vector outlines)",
     )
+    parser.add_argument(
+        "--ocr-lang", default="eng", metavar="LANG",
+        help="tesseract language(s) for text extraction, e.g. eng+fra (default eng)",
+    )
+    parser.add_argument(
+        "--force", action="store_true",
+        help="vectorize even inputs the complexity guard flags as photographic",
+    )
 
 
 def _vector_options(args: argparse.Namespace) -> VectorizeOptions:
@@ -80,6 +88,8 @@ def _vector_options(args: argparse.Namespace) -> VectorizeOptions:
         max_dim=args.max_dim,
         detect_gradients=not args.no_gradients,
         extract_text=True if args.text else (False if args.no_text else None),
+        ocr_lang=args.ocr_lang,
+        force=args.force,
     )
 
 
@@ -90,7 +100,11 @@ def _default_output(input_path: str, suffix: str) -> Path:
 
 def cmd_vectorize(args: argparse.Namespace) -> int:
     engine = ComplianceEngine(load_system(args.system))
-    doc = engine.load(args.input, _vector_options(args))
+    try:
+        doc = engine.load(args.input, _vector_options(args))
+    except ComplexityError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     out = Path(args.output) if args.output else _default_output(args.input, ".svg")
     save(doc, out)
     print(f"Vectorized {args.input} -> {out} ({len(doc.shapes)} shapes)")
@@ -99,7 +113,11 @@ def cmd_vectorize(args: argparse.Namespace) -> int:
 
 def cmd_audit(args: argparse.Namespace) -> int:
     engine = ComplianceEngine(load_system(args.system), format=args.format)
-    doc = engine.load(args.input, _vector_options(args))
+    try:
+        doc = engine.load(args.input, _vector_options(args))
+    except ComplexityError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     report = engine.audit(doc)
     print(report.to_json() if args.json else report.to_text())
     return 0 if report.score >= args.min_score else 1
@@ -107,7 +125,11 @@ def cmd_audit(args: argparse.Namespace) -> int:
 
 def cmd_comply(args: argparse.Namespace) -> int:
     engine = ComplianceEngine(load_system(args.system), format=args.format)
-    doc = engine.load(args.input, _vector_options(args))
+    try:
+        doc = engine.load(args.input, _vector_options(args))
+    except ComplexityError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     before = engine.audit(doc).score
     report = engine.comply(doc)
     out = Path(args.output) if args.output else _default_output(args.input, ".compliant.svg")

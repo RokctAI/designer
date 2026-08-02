@@ -126,12 +126,13 @@ accessibility:
 | `stroke.width` | widths from the stroke scale | snap to nearest |
 | `type.font` | fonts from the whitelist | replace with primary font |
 | `type.scale` | sizes from the type scale | snap to nearest |
-| `a11y.contrast` | WCAG contrast for text | recolor to best-contrast token |
+| `a11y.contrast` | WCAG contrast for text vs its **local** background | recolor to best-contrast token |
 | `type.hierarchy` | multi-text layouts span ≥2 scale levels | report only |
 | `format.canvas` | canvas matches the target format | rescale + center onto format |
 | `format.margin` | text inside the format's safe margin | move inside (grid-aligned) |
 | `format.min-text` | text ≥ the format's legibility floor | bump to on-scale size |
 | `geometry.transform` | flags unevaluated transforms | report only |
+| `engine.capability` | constructs the audit couldn't evaluate are reported | report only |
 
 All color math runs in **OKLab**, so "nearest color" matches human
 perception, and contrast checks implement **WCAG 2.x** exactly.
@@ -162,6 +163,35 @@ deterministically and at scale. The roadmap toward senior-level scope:
 - photo-region handling (detect and embed, or reject) alongside vector layers;
 - brand-system linting for whole campaigns (cross-deliverable consistency);
 - a feedback loop that turns audit findings into regeneration prompts.
+
+## Known limitations (verified, by design or on the roadmap)
+
+Honesty is a feature. These are the current edges, confirmed by
+adversarial testing:
+
+- **Flat artwork only.** Photographic or heavily textured inputs are
+  rejected with a clear `ComplexityError` instead of producing huge,
+  noisy files (`--force` overrides). This engine standardizes flat
+  graphic design; it is not a photo tracer.
+- **OCR reads straight, clean text.** Rotated, arced, or heavily
+  stylized headlines are not detected and remain vector outlines; busy
+  backgrounds degrade recognition; non-English needs the tesseract
+  language pack plus `--ocr-lang`. When OCR is unavailable or skipped,
+  the report says so (`engine.capability`).
+- **Complex SVG constructs are reported, not evaluated.** `<use>`,
+  `clipPath`, `mask`, `filter`, CSS `<style>` blocks and `<tspan>`
+  structure are dropped or flattened at parse time — each one becomes a
+  warning finding, so an audit can never silently pass art it did not
+  actually see. Transforms are preserved and flagged, not applied.
+- **Gradient detection covers linear and radial ramps** (including
+  diagonal and subtle ones) and rejects flat color-blocking via a
+  smoothness test; exotic gradients (conic, multi-axis meshes) still
+  posterize.
+- **Contrast checks use each text's local background** (topmost shape
+  under the text anchor), with paths approximated by bounding box —
+  pathological overlaps can still fool it.
+- **No taste.** Hierarchy, composition and layout judgment are reported
+  (`type.hierarchy`) or left to humans, not auto-fixed.
 
 ## Development
 

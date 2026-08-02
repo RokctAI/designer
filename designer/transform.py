@@ -15,11 +15,13 @@ _X_ATTRS = ("x", "cx", "x1", "x2")
 _Y_ATTRS = ("y", "cy", "y1", "y2")
 _LEN_ATTRS = ("width", "height", "r", "rx", "ry", "font-size", "stroke-width")
 
-_NUM_RE = re.compile(r"-?\d+(?:\.\d+)?(?:e-?\d+)?", re.IGNORECASE)
-_TOKEN_RE = re.compile(r"([MmLlHhVvCcSsQqTtAaZz])|(-?\d+(?:\.\d+)?(?:e-?\d+)?)")
+from designer.path import parse_path, serialize_path
 
-# Per absolute command: for each parameter, how to transform it.
-# "x"/"y" = position, "lx"/"ly" = length-only, "raw" = untouched.
+_NUM_RE = re.compile(r"-?\d+(?:\.\d+)?(?:e-?\d+)?", re.IGNORECASE)
+
+# Per command letter: how each parameter transforms.
+# "x"/"y" = position (translate only when absolute), "l" = length-only,
+# "raw" = untouched (arc rotation and flags).
 _CMD_PARAMS = {
     "M": ["x", "y"],
     "L": ["x", "y"],
@@ -29,53 +31,44 @@ _CMD_PARAMS = {
     "C": ["x", "y", "x", "y", "x", "y"],
     "S": ["x", "y", "x", "y"],
     "Q": ["x", "y", "x", "y"],
-    "A": ["lx", "ly", "raw", "raw", "raw", "x", "y"],
+    "A": ["l", "l", "raw", "raw", "raw", "x", "y"],
+    "Z": [],
 }
 
 
 def _fmt(v: float) -> str:
-    return f"{v:.2f}".rstrip("0").rstrip(".")
+    return f"{v:.2f}".rstrip("0").rstrip(".") or "0"
 
 
 def transform_path(d: str, s: float, tx: float, ty: float) -> str:
-    """Apply uniform scale + translate to path data. Relative commands
-    scale but don't translate (translation is carried by the initial
-    absolute moveto)."""
-    out: list[str] = []
-    cmd = ""
-    params: list[str] = []
-    idx = 0
-
-    def emit_number(value: float, kind: str, absolute: bool) -> str:
-        if kind == "raw":
-            return _fmt(value)
-        scaled = value * s
-        if absolute:
-            if kind == "x":
-                scaled += tx
-            elif kind == "y":
-                scaled += ty
-        return _fmt(scaled)
-
-    for match in _TOKEN_RE.finditer(d):
-        if match.group(1):
-            cmd = match.group(1)
-            out.append(cmd)
-            upper = cmd.upper()
-            params = _CMD_PARAMS.get(upper, [])
-            idx = 0
-        else:
-            value = float(match.group(2))
-            if not params:  # Z or unknown: pass through
-                out.append(_fmt(value))
+    """Apply uniform scale + translate to path data, using the real
+    path grammar (fused arc flags and compact decimals decode
+    correctly). Relative commands scale but don't translate. Malformed
+    data raises ValueError — callers must not ship a half-transformed
+    guess."""
+    cmds = parse_path(d)
+    out = []
+    for cmd, params in cmds:
+        kinds = _CMD_PARAMS[cmd.upper()]
+        absolute = cmd.isupper()
+        new_params = []
+        for kind, value in zip(kinds, params):
+            if kind == "raw":
+                new_params.append(value)
                 continue
-            kind = params[idx % len(params)]
-            out.append(emit_number(value, kind, cmd.isupper()))
-            idx += 1
-    return " ".join(out)
+            scaled = value * s
+            if absolute:
+                if kind == "x":
+                    scaled += tx
+                elif kind == "y":
+                    scaled += ty
+            new_params.append(scaled)
+        out.append((cmd, new_params))
+    return serialize_path(out)
 
 
-def _transform_shape(shape: Shape, s: float, tx: float, ty: float) -> None:
+def _transform_shape(shape: Shape, s: float, tx: float, ty: float) -> bool:
+    """Returns False when part of the shape could not be transformed."""
     for attr in _X_ATTRS:
         v = shape.numeric(attr)
         if v is not None:
@@ -89,7 +82,12 @@ def _transform_shape(shape: Shape, s: float, tx: float, ty: float) -> None:
         if v is not None:
             shape.set(attr, _fmt(v * s))
     if shape.tag == "path" and shape.attrs.get("d"):
-        shape.attrs["d"] = transform_path(shape.attrs["d"], s, tx, ty)
+        try:
+            shape.attrs["d"] = transform_path(shape.attrs["d"], s, tx, ty)
+        except ValueError:
+            # Never ship a half-transformed guess; leave the path where
+            # it was and let the caller surface the mismatch.
+            return False
     if shape.tag in ("polygon", "polyline") and shape.attrs.get("points"):
         nums = [float(n) for n in _NUM_RE.findall(shape.attrs["points"])]
         pts = [
@@ -99,14 +97,20 @@ def _transform_shape(shape: Shape, s: float, tx: float, ty: float) -> None:
         shape.attrs["points"] = " ".join(
             f"{pts[i]},{pts[i + 1]}" for i in range(0, len(pts) - 1, 2)
         )
+    return True
 
 
 def affine_document(doc: Document, s: float, tx: float, ty: float) -> None:
     """Scale the whole document by ``s`` then translate by (tx, ty),
     in place. Canvas size is NOT changed — callers set doc.width/height
-    to the target themselves."""
-    for shape in doc.shapes:
-        _transform_shape(shape, s, tx, ty)
+    to the target themselves. Shapes whose geometry cannot be safely
+    transformed are left untouched and recorded in doc.warnings."""
+    for i, shape in enumerate(doc.shapes):
+        if not _transform_shape(shape, s, tx, ty):
+            doc.warnings.append(
+                f"shape {i} (<{shape.tag}>) has path data this engine could not "
+                "transform; it was left at its original scale/position"
+            )
     for grad in doc.defs:
         for key in list(grad.coords):
             v = grad.coords[key]

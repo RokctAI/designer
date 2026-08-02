@@ -26,6 +26,22 @@ from designer.svg import Document, GradientDef, Shape
 Point = tuple[float, float]
 
 
+class ComplexityError(ValueError):
+    """Input is too complex to vectorize meaningfully (photographic or
+    heavily textured). Raised instead of producing megabytes of noisy
+    micro-paths; callers surface the message to the user."""
+
+    def __init__(self, density: float, limit: float):
+        self.density = density
+        self.limit = limit
+        super().__init__(
+            f"input appears photographic or heavily textured (edge density "
+            f"{density:.2f} exceeds {limit:.2f}). Vectorization would produce a "
+            "huge, noisy file. Use flat artwork, reduce --colors, lower "
+            "--max-dim, or pass --force to override."
+        )
+
+
 @dataclass
 class VectorizeOptions:
     n_colors: int = 6
@@ -41,6 +57,11 @@ class VectorizeOptions:
     # Detected text is re-emitted as editable <text>, never as outlines.
     extract_text: bool | None = None
     min_text_confidence: float = 60.0
+    ocr_lang: str = "eng"  # tesseract language(s), e.g. "eng+fra"
+    # Complexity guard: reject photographic/textured inputs instead of
+    # emitting noise. Density = label transitions per pixel.
+    max_edge_density: float = 0.4
+    force: bool = False  # override the complexity guard
 
 
 # ------------------------------------------------------------- tracing
@@ -365,6 +386,7 @@ def vectorize_file(path: str | Path, options: VectorizeOptions | None = None) ->
     img = load_image(path, max_dim=options.max_dim)
 
     spans = []
+    ocr_note = None
     want_text = options.extract_text
     if want_text is None:
         from designer.text import ocr_available
@@ -373,7 +395,12 @@ def vectorize_file(path: str | Path, options: VectorizeOptions | None = None) ->
     if want_text:
         from designer.text import extract_text
 
-        img, spans = extract_text(img, options.min_text_confidence)
+        img, spans = extract_text(img, options.min_text_confidence, lang=options.ocr_lang)
+    elif options.extract_text is None:
+        ocr_note = (
+            "OCR unavailable (tesseract not installed): any text in the image "
+            "remains as vector outlines instead of editable <text>"
+        )
 
     internal_colors = (
         max(options.n_colors, options.gradient_bands)
@@ -381,8 +408,22 @@ def vectorize_file(path: str | Path, options: VectorizeOptions | None = None) ->
         else options.n_colors
     )
     qimg = quantize(img, n_colors=internal_colors)
-    gradients = detect_gradients(qimg) if options.detect_gradients else []
+
+    labels = qimg.labels
+    transitions = int((labels[:, 1:] != labels[:, :-1]).sum()) + int(
+        (labels[1:, :] != labels[:-1, :]).sum()
+    )
+    density = transitions / labels.size
+    if density > options.max_edge_density and not options.force:
+        raise ComplexityError(density, options.max_edge_density)
+
+    original = np.asarray(img.convert("RGB"), dtype=np.uint8)
+    gradients = (
+        detect_gradients(qimg, original=original) if options.detect_gradients else []
+    )
     doc = vectorize_quantized(qimg, options, gradients)
+    if ocr_note:
+        doc.warnings.append(ocr_note)
 
     for span in spans:
         doc.shapes.append(

@@ -11,12 +11,14 @@ __version__ = "0.1.0"
 
 from designer.tokens import DesignSystem, load_system, system_from_dict
 from designer.engine import ComplianceEngine
+from designer.vectorize import ComplexityError
 from designer.report import Finding, Report, Severity
 
 __all__ = [
     "DesignSystem",
     "load_system",
     "ComplianceEngine",
+    "ComplexityError",
     "Finding",
     "Report",
     "Severity",
