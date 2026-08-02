@@ -1,0 +1,46 @@
+# Default design system — replace with your brand's tokens.
+# Every value here is a rule the compliance engine will enforce and,
+# where possible, auto-fix.
+name: Default
+
+color:
+  tokens:
+    primary: "#1a56db"
+    primary-dark: "#1e3a8a"
+    accent: "#f59e0b"
+    ink: "#111827"
+    muted: "#6b7280"
+    surface: "#f3f4f6"
+    white: "#ffffff"
+  # Hard cap on distinct colors in a single deliverable.
+  max_colors: 6
+  # OKLab distance beyond which a snap-to-token is flagged as aggressive.
+  snap_warning_distance: 0.18
+
+gradient:
+  # Whether deliverables may contain gradients at all. When false,
+  # detected gradients are flattened to the nearest token.
+  allowed: true
+  max_stops: 4
+
+typography:
+  fonts:
+    - Inter
+    - Helvetica Neue
+    - Arial
+    - sans-serif
+  scale: [12, 14, 16, 20, 24, 32, 48, 64]
+
+layout:
+  # Base spacing/positioning grid in px. Primitive geometry snaps to it.
+  grid: 8
+  # Shapes smaller than this (px) are treated as noise and removed.
+  min_element_size: 4
+
+stroke:
+  widths: [1, 2, 4, 8]
+
+accessibility:
+  min_contrast_text: 4.5
+  min_contrast_large_text: 3.0
+  large_text_size: 24

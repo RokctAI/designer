@@ -1,0 +1,18 @@
+Design system : Default
+Target        : examples/ai_logo.png
+Compliance    : 100.0/100  (5 auto-fixed, 0 open)
+
+  FIXED   color.palette [shape 0]: fill #eeeef2 is not a brand token (nearest: surface #f3f4f6, distance 0.017)
+          -> snapped fill to token 'surface' (#f3f4f6)
+  FIXED   color.palette [shape 1]: fill #1f59cd is not a brand token (nearest: primary #1a56db, distance 0.023)
+          -> snapped fill to token 'primary' (#1a56db)
+  FIXED   color.palette [shape 2]: fill #171b24 is not a brand token (nearest: ink #111827, distance 0.018)
+          -> snapped fill to token 'ink' (#111827)
+  FIXED   color.palette [shape 3]: fill #f8a21f is not a brand token (nearest: accent #f59e0b, distance 0.012)
+          -> snapped fill to token 'accent' (#f59e0b)
+  FIXED   color.palette [shape 4]: fill #88a0d2 is not a brand token (nearest: muted #6b7280, distance 0.165)
+          -> snapped fill to token 'muted' (#6b7280)
+
+Score before fixes : 90.0/100
+Score after fixes  : 100.0/100
+Wrote examples/ai_logo.compliant.svg
