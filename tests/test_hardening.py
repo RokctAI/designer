@@ -84,32 +84,65 @@ def test_event_handlers_and_unsafe_hrefs_stripped(tmp_path):
 # ----------------------------------------------------- capability honesty
 
 
-def test_unsupported_constructs_reported_not_hidden(tmp_path):
-    src = tmp_path / "fancy.svg"
+def test_css_styling_is_resolved_and_audited(tmp_path):
+    """CSS-hidden off-system styling used to be invisible to the audit."""
+    src = tmp_path / "styled.svg"
+    src.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">'
+        "<style>.brand{fill:#ff0000} .hd{font-family:Papyrus;font-size:19px}</style>"
+        '<circle class="brand" cx="50" cy="50" r="12"/>'
+        '<text class="hd" x="10" y="150">Headline</text>'
+        "</svg>"
+    )
+    doc = parse_svg(src)
+    circle = next(s for s in doc.shapes if s.tag == "circle")
+    text = next(s for s in doc.shapes if s.tag == "text")
+    assert circle.fill == "#ff0000"
+    assert text.attrs["font-family"] == "Papyrus"
+
+    report = ComplianceEngine(load_system()).audit(doc)
+    rules = {f.rule for f in report.findings}
+    assert "type.font" in rules       # Papyrus caught
+    assert "type.scale" in rules      # 19px caught
+    assert "color.palette" in rules   # #ff0000 caught
+
+
+def test_use_element_is_instantiated(tmp_path):
+    src = tmp_path / "used.svg"
+    src.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">'
+        '<defs><rect id="proto" width="20" height="20" fill="#1a56db"/></defs>'
+        '<use href="#proto" x="100" y="100"/>'
+        "</svg>"
+    )
+    doc = parse_svg(src)
+    rect = next(s for s in doc.shapes if s.tag == "rect")
+    assert rect.numeric("x") == 100 and rect.numeric("y") == 100
+    assert rect.fill == "#1a56db"
+
+
+def test_preserved_defs_round_trip_and_are_reported(tmp_path):
+    src = tmp_path / "clipped.svg"
     src.write_text(
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
-        "<style>.brand{fill:#ff0000}</style>"
-        '<defs><clipPath id="c"><rect width="10" height="10"/></clipPath>'
-        '<rect id="proto" width="20" height="20"/></defs>'
-        '<use href="#proto"/>'
+        '<defs><clipPath id="c"><rect width="10" height="10"/></clipPath></defs>'
+        '<rect x="0" y="0" width="50" height="50" fill="#111827" clip-path="url(#c)"/>'
         '<text x="10" y="20" font-size="16">Hello <tspan dy="20">World</tspan></text>'
         "</svg>"
     )
     doc = parse_svg(src)
+    assert any("clipPath" in d for d in doc.raw_defs)
+    out = serialize(doc)
+    assert "clipPath" in out  # rendering stays faithful
     joined = " ".join(doc.warnings)
-    assert "<style>" in joined or "CSS" in joined
     assert "clipPath" in joined
-    assert "use" in joined
     assert "flattened" in joined  # tspan
-
     report = ComplianceEngine(load_system()).audit(doc)
-    capability = [f for f in report.findings if f.rule == "engine.capability"]
-    assert len(capability) >= 4
-    # Render-affecting drops are warnings; the score cannot be a clean 100.
+    assert any(f.rule == "engine.capability" for f in report.findings)
     assert report.score < 100
 
 
-def test_group_transform_composes_onto_children(tmp_path):
+def test_group_transform_is_baked_into_geometry(tmp_path):
     src = tmp_path / "grouped.svg"
     src.write_text(
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
@@ -120,7 +153,25 @@ def test_group_transform_composes_onto_children(tmp_path):
     )
     doc = parse_svg(src)
     rect = doc.shapes[0]
-    assert rect.attrs["transform"] == "translate(10 10) scale(2)"
+    # translate(10 10) scale(2) applied to a 10x10 rect at the origin
+    assert rect.numeric("x") == 10 and rect.numeric("y") == 10
+    assert rect.numeric("width") == 20 and rect.numeric("height") == 20
+    assert "transform" not in rect.attrs
+
+
+def test_rotated_primitive_keeps_transform_and_warns(tmp_path):
+    src = tmp_path / "rotated.svg"
+    src.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+        '<rect x="5" y="5" width="30" height="10" fill="#1a56db" '
+        '  transform="rotate(30)"/>'
+        "</svg>"
+    )
+    doc = parse_svg(src)
+    rect = doc.shapes[0]
+    assert "transform" in rect.attrs  # geometry preserved, not distorted
+    assert rect.numeric("width") == 30
+    assert any("cannot be baked" in w for w in doc.warnings)
 
 
 # ---------------------------------------------------------- path grammar

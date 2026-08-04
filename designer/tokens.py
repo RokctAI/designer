@@ -17,10 +17,19 @@ import yaml
 from designer.color import RGB, parse_color, to_hex
 
 
+# Roles describe what a color is FOR, so snapping can respect intent:
+# a large background area should land on a surface color, body text on
+# ink, a small emphasis shape on an accent.
+SURFACE_ROLES = ("surface", "background")
+TEXT_ROLES = ("ink", "text")
+ACCENT_ROLES = ("accent", "primary", "secondary")
+
+
 @dataclass
 class ColorToken:
     name: str
     rgb: RGB
+    role: str = "other"
 
     @property
     def hex(self) -> str:
@@ -39,6 +48,15 @@ class DesignSystem:
     gradients_allowed: bool = True
     gradient_max_stops: int = 4
 
+    # Print production (only enforced when the target format is print)
+    bleed: float = 0.0            # px of bleed beyond the trim edge
+    min_print_stroke: float = 0.0  # thinnest line the press can hold
+    max_ink_coverage: float = 0.0  # total CMYK ink %, 0 = unchecked
+
+    # Layout quality
+    alignment_tolerance: float = 2.0  # px; edges closer than this should align
+    role_aware_snapping: bool = True
+
     fonts: list[str] = field(default_factory=lambda: ["Inter", "sans-serif"])
     type_scale: list[float] = field(default_factory=lambda: [12, 14, 16, 20, 24, 32, 48, 64])
 
@@ -54,6 +72,10 @@ class DesignSystem:
     def token_rgbs(self) -> list[RGB]:
         return [t.rgb for t in self.colors]
 
+    def tokens_for_role(self, roles: tuple[str, ...]) -> list[ColorToken]:
+        """Tokens carrying any of ``roles`` (empty list if none do)."""
+        return [t for t in self.colors if t.role in roles]
+
     def token_named(self, rgb: RGB) -> str | None:
         for t in self.colors:
             if t.rgb == rgb:
@@ -67,10 +89,23 @@ def _parse_system(data: dict) -> DesignSystem:
     color_cfg = data.get("color", {}) or {}
     tokens = color_cfg.get("tokens", {}) or {}
     for name, value in tokens.items():
+        # A token is either "name: #hex" or "name: {hex: ..., role: ...}".
+        role = "other"
+        if isinstance(value, dict):
+            role = str(value.get("role", "other"))
+            value = value.get("hex")
         rgb = parse_color(str(value))
         if rgb is None:
             raise ValueError(f"Color token {name!r} has unparseable value {value!r}")
-        system.colors.append(ColorToken(name=name, rgb=rgb))
+        # An unroled token named like a role adopts it, so existing
+        # systems get sensible behavior without being rewritten.
+        if role == "other":
+            lowered = name.lower()
+            for candidate in SURFACE_ROLES + TEXT_ROLES + ACCENT_ROLES:
+                if candidate in lowered:
+                    role = candidate
+                    break
+        system.colors.append(ColorToken(name=name, rgb=rgb, role=role))
     system.max_colors = int(color_cfg.get("max_colors", system.max_colors))
     system.snap_warning_distance = float(
         color_cfg.get("snap_warning_distance", system.snap_warning_distance)
@@ -79,6 +114,15 @@ def _parse_system(data: dict) -> DesignSystem:
     gradient_cfg = data.get("gradient", {}) or {}
     system.gradients_allowed = bool(gradient_cfg.get("allowed", system.gradients_allowed))
     system.gradient_max_stops = int(gradient_cfg.get("max_stops", system.gradient_max_stops))
+
+    print_cfg = data.get("print", {}) or {}
+    system.bleed = float(print_cfg.get("bleed", system.bleed))
+    system.min_print_stroke = float(
+        print_cfg.get("min_stroke", system.min_print_stroke)
+    )
+    system.max_ink_coverage = float(
+        print_cfg.get("max_ink_coverage", system.max_ink_coverage)
+    )
 
     type_cfg = data.get("typography", {}) or {}
     if "fonts" in type_cfg:
@@ -90,6 +134,12 @@ def _parse_system(data: dict) -> DesignSystem:
     system.grid = float(layout_cfg.get("grid", system.grid))
     system.min_element_size = float(
         layout_cfg.get("min_element_size", system.min_element_size)
+    )
+    system.alignment_tolerance = float(
+        layout_cfg.get("alignment_tolerance", system.alignment_tolerance)
+    )
+    system.role_aware_snapping = bool(
+        layout_cfg.get("role_aware_snapping", system.role_aware_snapping)
     )
 
     stroke_cfg = data.get("stroke", {}) or {}

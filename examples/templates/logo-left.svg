@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 320" width="640" height="320">
+  <rect x="0" y="0" width="640" height="320" fill="#f3f4f6" data-token="advertiser-2"/>
+  <rect x="0" y="0" width="640" height="16" fill="#1a56db" data-token="advertiser-1"/>
+  <image data-slot="logo" data-optional="true" data-min-unit-width="400"
+         data-freed-to="headline" x="32" y="72" width="160" height="160"
+         href=""/>
+  <text data-slot="headline" data-fit="shrink" data-fit-width="400" data-fit-height="72"
+        x="224" y="128" font-size="48" font-weight="bold" fill="#111827"
+        font-family="DejaVu Sans">Headline</text>
+  <text data-slot="offer" data-fit="shrink" data-fit-width="400" data-fit-height="44"
+        x="224" y="184" font-size="32" fill="#1a56db" data-token="advertiser-1"
+        font-family="DejaVu Sans">Offer</text>
+  <text data-slot="contact" data-fit="shrink" data-fit-width="400" data-fit-height="28"
+        x="224" y="240" font-size="20" fill="#6b7280"
+        font-family="DejaVu Sans">Contact</text>
+</svg>

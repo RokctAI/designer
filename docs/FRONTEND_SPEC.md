@@ -97,7 +97,8 @@ reproducible and debuggable. `jobs.process_design_request` uses
 | `get_design_system` | name | full JSON: brand_name, tokens `[{name, hex, role}]`, fonts `[{name, descriptor}]`, type_scale, grid, stroke_widths, gradient config, contrast minimums. Drives the editor's constrained controls. |
 | `save_candidate_edit` | candidate, svg (string) | parse + **audit** the edited SVG against the request's system. If violations are auto-fixable, run comply and return the fixed SVG. Creates a Design Candidate Revision. Returns `{"svg", "score", "report_json", "revision"}`. Reject (417) only if the SVG is unparseable. |
 | `extract_palette` | file_url, n=6 | engine palette extraction from an uploaded image (`designer.raster.quantize` + `palette_report`): returns `[{hex, coverage}]`. Powers "import brand colors from your existing logo" in the setup wizard. |
-| `render_png` | candidate, width=1024 | server-side raster of the SVG for downloads/social exports (cairosvg or resvg; optional dependency — return 501 with a clear message if absent and let the frontend fall back to client-side rasterization via canvas). |
+| `render_png` | candidate, width=1024 | server-side raster via `designer.render_png` (built into the engine). |
+| `render_pdf` | candidate, dpi=300, cmyk=0 | press-ready vector PDF via `designer.render_pdf`. |
 | `list_requests` | page, page_size | session user's request history for the studio home. |
 
 Security notes for `save_candidate_edit`: parse with the engine's own

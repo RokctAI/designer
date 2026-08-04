@@ -43,7 +43,7 @@ several DocTypes and API methods defined here.
 ### Engine integration points (already exported by the package)
 
 ```python
-from designer import ComplianceEngine, system_from_dict
+from designer import ComplianceEngine, system_from_dict, render_png, render_pdf
 from designer.svg import serialize
 from designer.vectorize import VectorizeOptions
 
@@ -54,6 +54,9 @@ audit = engine.audit(doc)          # read-only Report (score, findings)
 report = engine.comply(doc)        # fixes doc in place, returns Report
 svg_text = serialize(doc)          # final deliverable
 report.to_json()                   # store verbatim on the candidate
+
+render_png(doc, "/path/preview.png", width=1024)   # gallery/thumbnail
+render_pdf(doc, "/path/ad.pdf", dpi=300, cmyk=True)  # press delivery
 ```
 
 Module layout inside the app:

@@ -13,6 +13,7 @@ from designer.formats import FormatSpec, get_format
 from designer.report import Report
 from designer.rules import DEFAULT_RULES, Rule
 from designer.rules.format_rules import CanvasFormatRule, MinTextSizeRule, SafeMarginRule
+from designer.rules.print_rules import BleedRule, InkCoverageRule, PrintStrokeRule
 from designer.svg import Document, parse_svg
 from designer.tokens import DesignSystem
 from designer.vectorize import VectorizeOptions, vectorize_file
@@ -36,7 +37,18 @@ class ComplianceEngine:
             # Canvas rescale runs first so every later rule (grid, type
             # scale...) operates in final coordinates; margin/legibility
             # run last, after typography has settled.
-            base = [CanvasFormatRule(format), *base, SafeMarginRule(format), MinTextSizeRule(format)]
+            base = [
+                CanvasFormatRule(format),
+                *base,
+                SafeMarginRule(format),
+                MinTextSizeRule(format),
+            ]
+            if format.category == "print":
+                base += [
+                    PrintStrokeRule(format),
+                    BleedRule(format),
+                    InkCoverageRule(format),
+                ]
         self.rules = base
 
     def audit(self, doc: Document) -> Report:

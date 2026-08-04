@@ -24,3 +24,27 @@ python examples/make_demo.py
 designer audit  examples/ai_logo.png --colors 5
 designer comply examples/ai_logo.png -o examples/ai_logo.compliant.svg --colors 5
 ```
+
+## Ad templates (field-ads path)
+
+| File | What it is |
+|---|---|
+| `templates/logo-left.svg` | Single-advertiser layout: optional logo (dropped below 400px wide, its space handed to the headline), fitted headline/offer/contact, two advertiser palette slots |
+| `templates/blocks.svg` | Composite retail layout: headline bar plus an `items` region that flows product cells |
+| `templates/blocks-cell.svg` | The per-product cell: photo, title, price |
+
+```python
+from designer import Item, TemplateData, render_template, render_pdf
+from designer.svg import parse_svg
+from designer.tokens import load_system
+
+doc = render_template(
+    parse_svg("examples/templates/blocks.svg"),
+    TemplateData(fields={"headline": "WEEKLY SPECIALS"},
+                 palette=["#c0392b"],
+                 items=[Item(title="Beans", price="R19.99", image_href=...)]),
+    load_system(),
+    cell_template=parse_svg("examples/templates/blocks-cell.svg"),
+)
+render_pdf(doc, "ad.pdf", dpi=300, cmyk=True)
+```

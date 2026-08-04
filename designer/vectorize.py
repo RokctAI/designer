@@ -31,15 +31,22 @@ class ComplexityError(ValueError):
     heavily textured). Raised instead of producing megabytes of noisy
     micro-paths; callers surface the message to the user."""
 
-    def __init__(self, density: float, limit: float):
+    def __init__(self, density: float, limit: float, photographic: bool = False):
         self.density = density
         self.limit = limit
-        super().__init__(
-            f"input appears photographic or heavily textured (edge density "
-            f"{density:.2f} exceeds {limit:.2f}). Vectorization would produce a "
-            "huge, noisy file. Use flat artwork, reduce --colors, lower "
-            "--max-dim, or pass --force to override."
-        )
+        if photographic:
+            message = (
+                f"this image is {density:.0%} photographic (limit {limit:.0%}) — it is a "
+                "photo, not a design. Vectorizing it would produce a huge, meaningless "
+                "file. Use it as an image, or pass --force to trace it anyway."
+            )
+        else:
+            message = (
+                f"input is too textured to vectorize meaningfully (edge density "
+                f"{density:.2f} exceeds {limit:.2f}). Use flatter artwork, reduce "
+                "--colors, lower --max-dim, or pass --force to override."
+            )
+        super().__init__(message)
 
 
 @dataclass
@@ -58,9 +65,13 @@ class VectorizeOptions:
     extract_text: bool | None = None
     min_text_confidence: float = 60.0
     ocr_lang: str = "eng"  # tesseract language(s), e.g. "eng+fra"
-    # Complexity guard: reject photographic/textured inputs instead of
-    # emitting noise. Density = label transitions per pixel.
+    # Hybrid output: embed photographic regions as <image> instead of
+    # tracing them, so a poster with a photo in it works properly.
+    hybrid: bool = True
+    # Complexity guard: refuse inputs that are photographs end to end
+    # (after hybrid extraction) rather than emitting noise.
     max_edge_density: float = 0.4
+    max_photo_coverage: float = 0.85
     force: bool = False  # override the complexity guard
 
 
@@ -409,34 +420,71 @@ def vectorize_file(path: str | Path, options: VectorizeOptions | None = None) ->
     )
     qimg = quantize(img, n_colors=internal_colors)
 
+    photo_regions = []
+    if options.hybrid:
+        from designer.hybrid import extract_photo_regions, photo_coverage
+
+        photo_regions, masked = extract_photo_regions(img, qimg.labels)
+        coverage = photo_coverage(photo_regions, qimg.width, qimg.height)
+        if coverage > options.max_photo_coverage and not options.force:
+            raise ComplexityError(coverage, options.max_photo_coverage, photographic=True)
+        if photo_regions:
+            qimg.labels = masked
+            total = max(1, int((masked >= 0).sum()))
+            qimg.coverage = [
+                float((masked == i).sum()) / total for i in range(len(qimg.palette))
+            ]
+
     labels = qimg.labels
-    transitions = int((labels[:, 1:] != labels[:, :-1]).sum()) + int(
-        (labels[1:, :] != labels[:-1, :]).sum()
-    )
-    density = transitions / labels.size
-    if density > options.max_edge_density and not options.force:
-        raise ComplexityError(density, options.max_edge_density)
+    flat = labels >= 0
+    if flat.sum() > 0:
+        transitions = int(((labels[:, 1:] != labels[:, :-1]) & flat[:, 1:]).sum()) + int(
+            ((labels[1:, :] != labels[:-1, :]) & flat[1:, :]).sum()
+        )
+        density = transitions / max(1, int(flat.sum()))
+        if density > options.max_edge_density and not options.force:
+            raise ComplexityError(density, options.max_edge_density)
 
     original = np.asarray(img.convert("RGB"), dtype=np.uint8)
     gradients = (
         detect_gradients(qimg, original=original) if options.detect_gradients else []
     )
     doc = vectorize_quantized(qimg, options, gradients)
+
+    # Photos sit above the traced background, below any text.
+    for region in photo_regions:
+        doc.shapes.append(
+            Shape(
+                tag="image",
+                attrs={
+                    "x": f"{region.x:g}",
+                    "y": f"{region.y:g}",
+                    "width": f"{region.width:g}",
+                    "height": f"{region.height:g}",
+                    "href": region.href,
+                    "preserveAspectRatio": "xMidYMid slice",
+                },
+            )
+        )
+    if photo_regions:
+        doc.warnings.append(
+            f"{len(photo_regions)} photographic region(s) embedded as raster rather "
+            "than vectorized; their content is not audited for brand compliance"
+        )
     if ocr_note:
         doc.warnings.append(ocr_note)
 
     for span in spans:
-        doc.shapes.append(
-            Shape(
-                tag="text",
-                attrs={
-                    "x": f"{span.x:g}",
-                    "y": f"{span.y:g}",
-                    "font-size": f"{span.font_size:g}",
-                    "fill": to_hex(span.color),
-                },
-                text=span.text,
+        attrs = {
+            "x": f"{span.x:g}",
+            "y": f"{span.y:g}",
+            "font-size": f"{span.font_size:g}",
+            "fill": to_hex(span.color),
+        }
+        if abs(getattr(span, "angle", 0.0)) > 0.5:
+            attrs["transform"] = (
+                f"rotate({span.angle:.2f} {span.x:g} {span.y:g})"
             )
-        )
+        doc.shapes.append(Shape(tag="text", attrs=attrs, text=span.text))
     doc.source = str(path)
     return doc

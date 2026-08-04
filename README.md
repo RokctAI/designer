@@ -39,6 +39,21 @@ AI image  ──►  vectorize  ──►  audit against design system  ──�
   target canvas (paths, gradients and text transformed together) and
   enforces per-format safe margins and minimum legible text size —
   plus a text-hierarchy check for multi-text layouts.
+- **Print & screen output.** `designer render art.svg -o ad.pdf --dpi 300`
+  writes a real vector PDF (embedded TrueType fonts, axial/radial
+  shadings, Flate images, optional CMYK) — and `-o card.png` rasterizes
+  with supersampled antialiasing, even-odd holes and gradients. No
+  cairo, no headless browser, no external binaries.
+- **Templates.** A slot-marked SVG plus captured content renders a
+  finished design in milliseconds — text fitted to its box with real
+  glyph metrics, size-inappropriate slots dropped (small ads lose the
+  logo, not the message), and repeated items flowed into a legibility-
+  floored grid that refuses to shrink below readable rather than
+  silently cramming.
+- **Layout quality — the measurable half of taste.** Collision (text on
+  text, text buried under a later opaque shape), near-miss alignment,
+  spacing rhythm, visual balance and whitespace are all checked;
+  collisions and alignment are auto-fixed, composition is reported.
 - **Design system as data.** Your standard lives in a YAML file: brand
   color tokens, color cap, font whitelist, modular type scale, spacing
   grid, stroke-width scale, WCAG contrast minimums. The engine enforces
@@ -47,7 +62,8 @@ AI image  ──►  vectorize  ──►  audit against design system  ──�
   violation with severity (`designer audit design.svg --min-score 90`
   works as a CI gate).
 - **Auto-fix.** Snaps every fill/stroke to the perceptually nearest
-  brand token, merges palettes over the cap, recolors low-contrast text
+  brand token **for its role** (a full-bleed background lands on a
+  surface color, never a bright accent), merges palettes over the cap, recolors low-contrast text
   to the best-contrast token, snaps geometry to the spacing grid,
   normalizes stroke widths and font sizes, replaces off-system fonts,
   and deletes sub-minimum "specks" that generators leave behind.
@@ -83,6 +99,10 @@ designer comply art.png --format instagram-story -o story.svg
 
 # Gate a pipeline: fail CI when a deliverable is off-brand
 designer audit deliverable.svg --min-score 95 --json
+
+# Deliver it: print-ready PDF, or a raster for the web
+designer render art.svg -o ad.pdf --dpi 300 --cmyk --comply
+designer render art.svg -o card.png --width 1200
 ```
 
 ## Defining your design system
@@ -91,10 +111,11 @@ designer audit deliverable.svg --min-score 95 --json
 name: Acme
 color:
   tokens:
-    primary: "#1a56db"
-    accent:  "#f59e0b"
-    ink:     "#111827"
-    white:   "#ffffff"
+    # "name: #hex", or give a role so snapping respects intent
+    primary: { hex: "#1a56db", role: primary }
+    accent:  { hex: "#f59e0b", role: accent }
+    ink:     { hex: "#111827", role: ink }
+    white:   { hex: "#ffffff", role: surface }
   max_colors: 6              # hard cap per deliverable
   snap_warning_distance: 0.18  # OKLab distance where a snap counts as aggressive
 typography:
@@ -106,6 +127,11 @@ gradient:
 layout:
   grid: 8                    # spacing grid (px)
   min_element_size: 4        # anything smaller is noise -> removed
+  alignment_tolerance: 2     # edges within this should align exactly
+print:                       # enforced for print formats only
+  bleed: 9                   # px past trim for full-bleed artwork
+  min_stroke: 0.75           # thinnest line the press can hold
+  max_ink_coverage: 240      # total CMYK ink %
 stroke:
   widths: [1, 2, 4, 8]
 accessibility:
@@ -131,7 +157,15 @@ accessibility:
 | `format.canvas` | canvas matches the target format | rescale + center onto format |
 | `format.margin` | text inside the format's safe margin | move inside (grid-aligned) |
 | `format.min-text` | text ≥ the format's legibility floor | bump to on-scale size |
-| `geometry.transform` | flags unevaluated transforms | report only |
+| `layout.collision` | text not overlapped or buried | move clear of the overlap |
+| `layout.alignment` | near-aligned edges share an exact coordinate | snap to the shared edge |
+| `layout.rhythm` | gaps follow the spacing scale | report only |
+| `layout.balance` | composition isn't lopsided | report only |
+| `layout.whitespace` | the layout has room to breathe | report only |
+| `print.hairline` | strokes survive the press (print formats) | raise to the press minimum |
+| `print.bleed` | edge artwork extends past trim (print formats) | extend into the bleed |
+| `print.ink` | total ink within the press limit (print formats) | report only |
+| `geometry.transform` | flags transforms that couldn't be baked | report only |
 | `engine.capability` | constructs the audit couldn't evaluate are reported | report only |
 
 All color math runs in **OKLab**, so "nearest color" matches human
@@ -152,46 +186,46 @@ save(doc, "poster.svg")
 
 ## Where this is headed
 
-Today the engine covers the production half of a junior designer's job:
-take generated art, make it clean, on-brand, accessible and delivery-ready,
-deterministically and at scale. The roadmap toward senior-level scope:
-
-- deeper layout intelligence (alignment detection, optical spacing);
-- semantic layer annotation via a vision model — a VLM (e.g. Gemini
-  bounding-box extraction) tagging regions as icon / wordmark /
-  decoration so they move as units in editors and survive re-layout;
-- photo-region handling (detect and embed, or reject) alongside vector layers;
+- semantic layer annotation via a vision model — tagging regions as
+  icon / wordmark / decoration so they move as units in editors, and
+  reading stylized display type that OCR cannot;
 - brand-system linting for whole campaigns (cross-deliverable consistency);
-- a feedback loop that turns audit findings into regeneration prompts.
+- a feedback loop that turns audit findings into regeneration prompts;
+- ICC-managed color for press instead of the current naive CMYK.
 
-## Known limitations (verified, by design or on the roadmap)
+## Known limitations (verified by adversarial testing)
 
-Honesty is a feature. These are the current edges, confirmed by
-adversarial testing:
+Honesty is a feature. What the engine cannot do, it says so about —
+in the report, not just in this file.
 
-- **Flat artwork only.** Photographic or heavily textured inputs are
-  rejected with a clear `ComplexityError` instead of producing huge,
-  noisy files (`--force` overrides). This engine standardizes flat
-  graphic design; it is not a photo tracer.
-- **OCR reads straight, clean text.** Rotated, arced, or heavily
-  stylized headlines are not detected and remain vector outlines; busy
-  backgrounds degrade recognition; non-English needs the tesseract
-  language pack plus `--ocr-lang`. When OCR is unavailable or skipped,
-  the report says so (`engine.capability`).
-- **Complex SVG constructs are reported, not evaluated.** `<use>`,
-  `clipPath`, `mask`, `filter`, CSS `<style>` blocks and `<tspan>`
-  structure are dropped or flattened at parse time — each one becomes a
-  warning finding, so an audit can never silently pass art it did not
-  actually see. Transforms are preserved and flagged, not applied.
-- **Gradient detection covers linear and radial ramps** (including
-  diagonal and subtle ones) and rejects flat color-blocking via a
-  smoothness test; exotic gradients (conic, multi-axis meshes) still
-  posterize.
-- **Contrast checks use each text's local background** (topmost shape
-  under the text anchor), with paths approximated by bounding box —
-  pathological overlaps can still fool it.
-- **No taste.** Hierarchy, composition and layout judgment are reported
-  (`type.hierarchy`) or left to humans, not auto-fixed.
+- **Photographs are embedded, not traced.** Photographic regions become
+  `<image>` elements and are excluded from the audit (their content is
+  not brand-checked). An image that is photographic end to end is
+  refused with a clear `ComplexityError` — it is a photo, not a design.
+- **OCR reads flat and tilted text, not arced or heavily stylized
+  type.** The rotation sweep covers roughly ±25°; curved baselines and
+  decorative display faces still fall through to vector outlines. Busy
+  backgrounds degrade recognition, and non-English needs the tesseract
+  language pack plus `--ocr-lang`. Whenever OCR is unavailable or a
+  construct is skipped, the report says so (`engine.capability`).
+- **`clipPath`/`mask`/`filter` are preserved but not evaluated.** They
+  round-trip so rendering stays faithful, and each raises a capability
+  finding, so an audit can never silently pass art it did not see.
+  `<use>`, CSS `<style>` rules and transforms *are* resolved. Compound
+  CSS selectors (`text.brand`) and rotated primitives that cannot be
+  baked are reported rather than guessed at.
+- **Gradients:** linear and radial (including diagonal, subtle and
+  off-center) are reconstructed, and flat color-blocking is rejected by
+  a smoothness test; conic and mesh gradients still posterize.
+- **CMYK conversion is naive**, adequate for a proof and an ink-coverage
+  sanity check — not a color-managed workflow.
+- **Fonts must be installed to be measured or rendered.** A missing
+  family falls back to a substitute face and the difference is
+  reported, never silently applied.
+- **Composition judgment is reported, not fixed.** Balance, rhythm,
+  whitespace and hierarchy describe the layout; only collisions and
+  near-miss alignment are repaired automatically, because those have a
+  single correct answer and the others are a designer's call.
 
 ## Development
 

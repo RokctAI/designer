@@ -1,9 +1,11 @@
 """Accessibility compliance: WCAG contrast for text.
 
 Contrast is measured against each text element's LOCAL background — the
-topmost shape painted beneath the text's anchor point — not a single
+topmost shape actually painted beneath the glyphs (exact hit test,
+sampled at several points across the real text box) — not a single
 document-wide background. White text on a navy panel over a white
-canvas is judged against the navy panel.
+canvas is judged against the navy panel, and text straddling a panel
+edge is judged by its worst-contrast part.
 """
 
 from __future__ import annotations
@@ -16,39 +18,10 @@ from designer.tokens import DesignSystem
 
 
 def _shape_contains(shape: Shape, px: float, py: float) -> bool:
-    """Point hit-test. Paths use their flattened bounding box — a
-    conservative approximation that is right far more often than a
-    whole-document background guess."""
-    if shape.tag in ("rect", "image"):
-        x, y = shape.numeric("x") or 0.0, shape.numeric("y") or 0.0
-        w, h = shape.numeric("width"), shape.numeric("height")
-        return w is not None and h is not None and x <= px <= x + w and y <= py <= y + h
-    if shape.tag == "circle":
-        cx, cy, r = shape.numeric("cx"), shape.numeric("cy"), shape.numeric("r")
-        if cx is None or cy is None or r is None:
-            return False
-        return (px - cx) ** 2 + (py - cy) ** 2 <= r * r
-    if shape.tag == "ellipse":
-        cx, cy = shape.numeric("cx"), shape.numeric("cy")
-        rx, ry = shape.numeric("rx"), shape.numeric("ry")
-        if None in (cx, cy, rx, ry) or rx == 0 or ry == 0:
-            return False
-        return ((px - cx) / rx) ** 2 + ((py - cy) / ry) ** 2 <= 1
-    if shape.tag == "path":
-        d = shape.attrs.get("d")
-        if not d:
-            return False
-        try:
-            from designer.path import path_bounds
+    """Exact point hit-test (even-odd for paths)."""
+    from designer.geometry import point_in_shape
 
-            bounds = path_bounds(d)
-        except ValueError:
-            return False
-        if bounds is None:
-            return False
-        min_x, min_y, max_x, max_y = bounds
-        return min_x <= px <= max_x and min_y <= py <= max_y
-    return False
+    return point_in_shape(shape, px, py)
 
 
 def _paint_to_rgb(doc: Document, paint: str | None) -> RGB | None:
@@ -64,24 +37,57 @@ def _paint_to_rgb(doc: Document, paint: str | None) -> RGB | None:
 
 
 def local_background(doc: Document, text_index: int) -> RGB | None:
-    """Background color behind a text shape: the topmost shape painted
-    before it that contains the text's sample point."""
+    """Worst-case background behind a text run.
+
+    The text box is sampled at several points (real font metrics), and
+    the sampled background with the LOWEST contrast against the text is
+    returned — so text straddling a panel edge is judged by its worst
+    part, not a lucky one.
+    """
+    from designer.color import contrast_ratio
+    from designer.geometry import shape_box
+
     text = doc.shapes[text_index]
-    x, y = text.numeric("x"), text.numeric("y")
-    if x is None or y is None:
-        return None
-    size = text.numeric("font-size") or 16.0
-    # Sample at the visual middle of the first line of glyphs.
-    px, py = x + size * 0.5, y - size * 0.35
-    for shape in reversed(doc.shapes[:text_index]):
-        if shape.tag == "text":
+    box = shape_box(text)
+    if box is None:
+        x, y = text.numeric("x"), text.numeric("y")
+        if x is None or y is None:
+            return None
+        size = text.numeric("font-size") or 16.0
+        box = (x, y - size * 0.75, x + size * 0.5, y)
+
+    fill = parse_color(text.get("fill") or "#000000")
+    min_x, min_y, max_x, max_y = box
+    samples = [
+        ((min_x + max_x) / 2, (min_y + max_y) / 2),
+        (min_x + (max_x - min_x) * 0.08, (min_y + max_y) / 2),
+        (max_x - (max_x - min_x) * 0.08, (min_y + max_y) / 2),
+        ((min_x + max_x) / 2, min_y + (max_y - min_y) * 0.2),
+        ((min_x + max_x) / 2, max_y - (max_y - min_y) * 0.2),
+    ]
+
+    worst: RGB | None = None
+    worst_ratio = float("inf")
+    fallback = _paint_to_rgb(doc, doc.background_color())
+    for px, py in samples:
+        found = None
+        for shape in reversed(doc.shapes[:text_index]):
+            if shape.tag == "text":
+                continue
+            if not _shape_contains(shape, px, py):
+                continue
+            rgb = _paint_to_rgb(doc, shape.get("fill"))
+            if rgb is not None:
+                found = rgb
+                break
+        if found is None:
+            found = fallback
+        if found is None:
             continue
-        if not _shape_contains(shape, px, py):
-            continue
-        rgb = _paint_to_rgb(doc, shape.get("fill"))
-        if rgb is not None:
-            return rgb
-    return _paint_to_rgb(doc, doc.background_color())
+        ratio = contrast_ratio(fill, found) if fill else 0.0
+        if ratio < worst_ratio:
+            worst_ratio, worst = ratio, found
+    return worst
 
 
 class ContrastRule(Rule):

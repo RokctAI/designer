@@ -4,14 +4,17 @@
 name: Default
 
 color:
+  # A token is either "name: #hex" or "name: {hex: ..., role: ...}".
+  # Roles let snapping respect intent: big areas land on surface colors,
+  # text on ink, small emphasis on accents.
   tokens:
-    primary: "#1a56db"
-    primary-dark: "#1e3a8a"
-    accent: "#f59e0b"
-    ink: "#111827"
-    muted: "#6b7280"
-    surface: "#f3f4f6"
-    white: "#ffffff"
+    primary: { hex: "#1a56db", role: primary }
+    primary-dark: { hex: "#1e3a8a", role: primary }
+    accent: { hex: "#f59e0b", role: accent }
+    ink: { hex: "#111827", role: ink }
+    muted: { hex: "#6b7280", role: text }
+    surface: { hex: "#f3f4f6", role: surface }
+    white: { hex: "#ffffff", role: surface }
   # Hard cap on distinct colors in a single deliverable.
   max_colors: 6
   # OKLab distance beyond which a snap-to-token is flagged as aggressive.
@@ -36,9 +39,18 @@ layout:
   grid: 8
   # Shapes smaller than this (px) are treated as noise and removed.
   min_element_size: 4
+  # Edges closer together than this should be aligned outright.
+  alignment_tolerance: 2
+  role_aware_snapping: true
 
 stroke:
   widths: [1, 2, 4, 8]
+
+# Print production limits (enforced for print formats only).
+print:
+  bleed: 0            # px beyond trim; 0 = no bleed requirement
+  min_stroke: 0.75    # thinnest line the press can hold
+  max_ink_coverage: 300  # total CMYK ink %, 0 = unchecked
 
 accessibility:
   min_contrast_text: 4.5
