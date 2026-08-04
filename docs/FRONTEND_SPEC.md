@@ -97,14 +97,22 @@ reproducible and debuggable. `jobs.process_design_request` uses
 | `get_design_system` | name | full JSON: brand_name, tokens `[{name, hex, role}]`, fonts `[{name, descriptor}]`, type_scale, grid, stroke_widths, gradient config, contrast minimums. Drives the editor's constrained controls. |
 | `save_candidate_edit` | candidate, svg (string) | parse + **audit** the edited SVG against the request's system. If violations are auto-fixable, run comply and return the fixed SVG. Creates a Design Candidate Revision. Returns `{"svg", "score", "report_json", "revision"}`. Reject (417) only if the SVG is unparseable. |
 | `extract_palette` | file_url, n=6 | engine palette extraction from an uploaded image (`designer.raster.quantize` + `palette_report`): returns `[{hex, coverage}]`. Powers "import brand colors from your existing logo" in the setup wizard. |
-| `render_png` | candidate, width=1024 | server-side raster of the SVG for downloads/social exports (cairosvg or resvg; optional dependency — return 501 with a clear message if absent and let the frontend fall back to client-side rasterization via canvas). |
+| `render_png` | candidate, width=1024 | server-side raster via `designer.render_png` (built into the engine). |
+| `render_pdf` | candidate, dpi=300, cmyk=0 | press-ready vector PDF via `designer.render_pdf`. |
 | `list_requests` | page, page_size | session user's request history for the studio home. |
 
 Security notes for `save_candidate_edit`: parse with the engine's own
-`parse_svg` (defusable, no script/foreignObject support by design —
-unknown elements are dropped); never store SVG that failed parsing;
-permission check = candidate's request `requested_by` or Design Manager
-role. The engine parser dropping unknown tags is the sanitizer.
+`parse_svg`, which enforces an attribute security policy — event-handler
+attributes (`on*`) are stripped, `href`/`xlink:href` values are limited
+to `data:image/*`, http(s) and relative targets, and `<script>`/
+`<foreignObject>`/unknown elements are dropped (each removal is recorded
+in `doc.warnings` and surfaced by the `engine.capability` rule). That
+policy is necessary but NOT sufficient on its own: also (a) serve
+candidate previews with a restrictive CSP (`script-src 'none'` for the
+preview context, or render inside a sandboxed iframe), (b) never store
+SVG that failed parsing, and (c) permission-check every call
+(candidate's request `requested_by` or Design Manager role). Treat all
+uploaded SVG as untrusted even after sanitization.
 
 ---
 
@@ -136,10 +144,9 @@ role. The engine parser dropping unknown tags is the sanitizer.
 3. Fonts: searchable font select (Google Fonts static list bundled at
    build time — name + category only, no font files needed server-side);
    `descriptor` auto-filled from category, editable. Offer an optional
-   "suggest by industry" shortcut (industry vertical -> starter font +
-   type-scale defaults, e.g. finance -> serif, logistics -> bold
-   geometric sans) — an idea carried over from the early
-   `design_pipeline` prototype's typography matrix.
+   "suggest by industry" shortcut: a small static matrix mapping
+   industry vertical -> starter font + type-scale defaults (e.g.
+   finance -> serif, logistics -> bold geometric sans).
 4. Rules: grid, type scale, stroke widths, max colors, gradient
    allowed/max stops, contrast minimums — pre-filled with engine
    defaults inside a collapsed "Advanced" section. Most users never

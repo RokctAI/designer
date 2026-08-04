@@ -8,7 +8,44 @@ from designer.color import nearest_color, oklab_to_rgb, parse_color, rgb_to_okla
 from designer.report import Finding, Severity
 from designer.rules.base import Rule
 from designer.svg import Document, GradientDef, shape_area
-from designer.tokens import DesignSystem
+from designer.tokens import (
+    ACCENT_ROLES,
+    SURFACE_ROLES,
+    TEXT_ROLES,
+    ColorToken,
+    DesignSystem,
+)
+
+# Fraction of the canvas above which a filled shape counts as "a large
+# area" and should snap to a surface color rather than an accent.
+LARGE_AREA_RATIO = 0.25
+SMALL_AREA_RATIO = 0.05
+
+
+def candidate_tokens(
+    doc: Document, shape, prop: str, system: DesignSystem
+) -> list[ColorToken]:
+    """Tokens eligible for this paint, narrowed by role when the design
+    system declares roles. Snapping a full-bleed background to a bright
+    accent is technically 'nearest' and always wrong."""
+    if not system.role_aware_snapping:
+        return list(system.colors)
+    roles: tuple[str, ...] = ()
+    if shape.tag == "text" and prop == "fill":
+        roles = TEXT_ROLES + ACCENT_ROLES
+    else:
+        area = shape_area(shape, doc)
+        canvas = doc.width * doc.height
+        if area is not None and canvas > 0:
+            ratio = area / canvas
+            if ratio >= LARGE_AREA_RATIO:
+                roles = SURFACE_ROLES + TEXT_ROLES
+            elif ratio <= SMALL_AREA_RATIO:
+                roles = ACCENT_ROLES + TEXT_ROLES + SURFACE_ROLES
+    if not roles:
+        return list(system.colors)
+    eligible = system.tokens_for_role(roles)
+    return eligible or list(system.colors)
 
 _PAINT_PROPS = ("fill", "stroke")
 
@@ -33,16 +70,16 @@ class PaletteRule(Rule):
 
     def run(self, doc: Document, system: DesignSystem, autofix: bool) -> list[Finding]:
         findings: list[Finding] = []
-        tokens = system.token_rgbs()
-        token_set = set(tokens)
+        token_set = set(system.token_rgbs())
         for i, shape in enumerate(doc.shapes):
             for prop in _PAINT_PROPS:
                 raw = shape.get(prop)
                 rgb = parse_color(raw) if raw else None
                 if rgb is None or rgb in token_set:
                     continue
-                idx, dist = nearest_color(rgb, tokens)
-                token = system.colors[idx]
+                eligible = candidate_tokens(doc, shape, prop, system)
+                idx, dist = nearest_color(rgb, [t.rgb for t in eligible])
+                token = eligible[idx]
                 severity = (
                     Severity.WARNING
                     if dist <= system.snap_warning_distance

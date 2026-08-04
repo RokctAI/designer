@@ -41,13 +41,25 @@ class GradientOptions:
     min_total_coverage: float = 0.04  # ignore tiny gradient patches
     # A real gradient spans a visible color range end to end; noisy
     # splits of one flat color do not.
-    min_color_span: float = 0.12
+    min_color_span: float = 0.08
+    # Smoothness: the lightness jump measured right at a band boundary
+    # must stay below this fraction of the bands' lightness step, else
+    # the bands are flat blocks (true gradients measure ~0.05; hard
+    # stripes ~0.5-1.0 even after quantization merges neighbours).
+    max_boundary_jump: float = 0.3
     radial_center_spread: float = 0.2  # centroid spread / extent below which it's radial
 
 
 def detect_gradients(
-    qimg: QuantizedImage, options: GradientOptions | None = None
+    qimg: QuantizedImage,
+    options: GradientOptions | None = None,
+    original: np.ndarray | None = None,
 ) -> list[GradientCandidate]:
+    """``original`` is the (h, w, 3) uint8 RGB image before
+    quantization. When provided, candidate chains must also pass a
+    smoothness test: a true gradient varies continuously across band
+    boundaries, while deliberate flat color-blocking jumps — so flat
+    stripe layouts are not fused into fake gradients."""
     options = options or GradientOptions()
     n = len(qimg.palette)
     if n < options.min_bands:
@@ -76,6 +88,10 @@ def detect_gradients(
             continue
         chain = _order_by_color(members, labs, adjacency, options)
         if chain is None:
+            continue
+        if original is not None and not _is_smooth(
+            chain, qimg.labels, original, labs, options.max_boundary_jump
+        ):
             continue
         cand = _fit(chain, qimg, options)
         if cand is None:
@@ -165,6 +181,56 @@ def _order_by_color(
         if (min(i, j), max(i, j)) not in adjacency:
             return None
     return chain
+
+
+_LINEAR_LUT = None
+
+
+def _oklab_l_map(rgb: np.ndarray) -> np.ndarray:
+    """Vectorized OKLab lightness for an (h, w, 3) uint8 array."""
+    global _LINEAR_LUT
+    if _LINEAR_LUT is None:
+        c = np.arange(256) / 255.0
+        _LINEAR_LUT = np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4)
+    lin = _LINEAR_LUT[rgb]
+    r, g, b = lin[..., 0], lin[..., 1], lin[..., 2]
+    l = np.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
+    m = np.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
+    s = np.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+    return 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s
+
+
+def _is_smooth(
+    chain: list[int],
+    labels: np.ndarray,
+    original: np.ndarray,
+    labs: list[np.ndarray],
+    max_jump_ratio: float = 0.3,
+) -> bool:
+    """True gradients vary continuously: the lightness difference right
+    at a band boundary is tiny compared to the bands' mean color step.
+    Flat color blocks jump the full step at the boundary."""
+    L = _oklab_l_map(original)
+    ratios = []
+    for a, b in zip(chain, chain[1:]):
+        # Compare each boundary's lightness jump against the two bands'
+        # own lightness step; hue-only pairs carry no signal to test.
+        step_l = abs(float(labs[a][0]) - float(labs[b][0]))
+        if step_l < 0.005:
+            continue
+        pair_jumps = []
+        for la, lb, La, Lb in (
+            (labels[:, :-1], labels[:, 1:], L[:, :-1], L[:, 1:]),
+            (labels[:-1, :], labels[1:, :], L[:-1, :], L[1:, :]),
+        ):
+            mask = ((la == a) & (lb == b)) | ((la == b) & (lb == a))
+            if mask.any():
+                pair_jumps.append(float(np.abs(La[mask] - Lb[mask]).mean()))
+        if pair_jumps:
+            ratios.append(float(np.mean(pair_jumps)) / step_l)
+    if not ratios:
+        return True
+    return float(np.mean(ratios)) < max_jump_ratio
 
 
 # -------------------------------------------------------------- fitting

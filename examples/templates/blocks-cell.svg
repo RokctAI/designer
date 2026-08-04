@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" width="180" height="180">
+  <rect x="0" y="0" width="180" height="180" fill="#f3f4f6"/>
+  <image data-slot="photo" x="8" y="8" width="164" height="104" href=""/>
+  <text data-slot="title" data-fit="shrink" data-fit-width="164" data-fit-height="20"
+        x="8" y="136" font-size="16" fill="#111827" font-family="DejaVu Sans">Item</text>
+  <text data-slot="price" data-fit="shrink" data-fit-width="164" data-fit-height="28"
+        x="8" y="166" font-size="24" font-weight="bold" fill="#1a56db"
+        data-token="advertiser-1" font-family="DejaVu Sans">R0.00</text>
+</svg>

@@ -4,6 +4,9 @@
   designer audit input.svg                    score against the system
   designer comply input.png -o out.svg        vectorize/parse + auto-fix
   designer tokens                             show the active system
+  designer formats                            list deliverable formats
+  designer render in.svg -o out.png           rasterize (PNG)
+  designer render in.svg -o out.pdf --dpi 300 vector PDF for print
 """
 
 from __future__ import annotations
@@ -15,9 +18,9 @@ from pathlib import Path
 from designer import __version__
 from designer.engine import ComplianceEngine
 from designer.formats import all_formats
-from designer.svg import save
+from designer.svg import parse_svg, save
 from designer.tokens import load_system
-from designer.vectorize import VectorizeOptions
+from designer.vectorize import ComplexityError, VectorizeOptions
 
 
 def _add_system_arg(parser: argparse.ArgumentParser) -> None:
@@ -69,6 +72,14 @@ def _add_vector_args(parser: argparse.ArgumentParser) -> None:
         "--no-text", action="store_true",
         help="disable OCR text extraction (text stays as vector outlines)",
     )
+    parser.add_argument(
+        "--ocr-lang", default="eng", metavar="LANG",
+        help="tesseract language(s) for text extraction, e.g. eng+fra (default eng)",
+    )
+    parser.add_argument(
+        "--force", action="store_true",
+        help="vectorize even inputs the complexity guard flags as photographic",
+    )
 
 
 def _vector_options(args: argparse.Namespace) -> VectorizeOptions:
@@ -80,6 +91,8 @@ def _vector_options(args: argparse.Namespace) -> VectorizeOptions:
         max_dim=args.max_dim,
         detect_gradients=not args.no_gradients,
         extract_text=True if args.text else (False if args.no_text else None),
+        ocr_lang=args.ocr_lang,
+        force=args.force,
     )
 
 
@@ -90,7 +103,11 @@ def _default_output(input_path: str, suffix: str) -> Path:
 
 def cmd_vectorize(args: argparse.Namespace) -> int:
     engine = ComplianceEngine(load_system(args.system))
-    doc = engine.load(args.input, _vector_options(args))
+    try:
+        doc = engine.load(args.input, _vector_options(args))
+    except ComplexityError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     out = Path(args.output) if args.output else _default_output(args.input, ".svg")
     save(doc, out)
     print(f"Vectorized {args.input} -> {out} ({len(doc.shapes)} shapes)")
@@ -99,7 +116,11 @@ def cmd_vectorize(args: argparse.Namespace) -> int:
 
 def cmd_audit(args: argparse.Namespace) -> int:
     engine = ComplianceEngine(load_system(args.system), format=args.format)
-    doc = engine.load(args.input, _vector_options(args))
+    try:
+        doc = engine.load(args.input, _vector_options(args))
+    except ComplexityError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     report = engine.audit(doc)
     print(report.to_json() if args.json else report.to_text())
     return 0 if report.score >= args.min_score else 1
@@ -107,7 +128,11 @@ def cmd_audit(args: argparse.Namespace) -> int:
 
 def cmd_comply(args: argparse.Namespace) -> int:
     engine = ComplianceEngine(load_system(args.system), format=args.format)
-    doc = engine.load(args.input, _vector_options(args))
+    try:
+        doc = engine.load(args.input, _vector_options(args))
+    except ComplexityError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     before = engine.audit(doc).score
     report = engine.comply(doc)
     out = Path(args.output) if args.output else _default_output(args.input, ".compliant.svg")
@@ -158,6 +183,43 @@ def cmd_formats(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_render(args: argparse.Namespace) -> int:
+    engine = ComplianceEngine(load_system(args.system), format=args.format)
+    try:
+        doc = engine.load(args.input, _vector_options(args))
+    except ComplexityError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if args.comply:
+        engine.comply(doc)
+
+    out = Path(args.output)
+    suffix = out.suffix.lower()
+    from designer.render import render_pdf, render_png
+
+    if suffix == ".pdf":
+        render_pdf(doc, out, dpi=args.dpi, cmyk=args.cmyk)
+    elif suffix in (".png", ".jpg", ".jpeg"):
+        image = render_png(
+            doc,
+            None,
+            width=args.width,
+            dpi=args.dpi if not args.width else None,
+            background=args.background,
+        )
+        image.save(str(out))
+    elif suffix == ".svg":
+        save(doc, out)
+    else:
+        print(f"error: unsupported output type {suffix!r}", file=sys.stderr)
+        return 2
+
+    for warning in doc.warnings:
+        print(f"note: {warning}", file=sys.stderr)
+    print(f"Wrote {out}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="designer",
@@ -205,6 +267,24 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("formats", help="list deliverable formats")
     p.set_defaults(func=cmd_formats)
+
+    p = sub.add_parser("render", help="render a design to PNG or print-ready PDF")
+    p.add_argument("input", help="SVG or raster image")
+    p.add_argument("--output", "-o", required=True, help="out.png | out.pdf | out.svg")
+    p.add_argument("--width", type=int, default=None, metavar="PX",
+                   help="output width in px (PNG only)")
+    p.add_argument("--dpi", type=float, default=300.0,
+                   help="output density; PDF page size and PNG scale (default 300)")
+    p.add_argument("--cmyk", action="store_true",
+                   help="PDF only: convert colors to CMYK (naive, non-ICC)")
+    p.add_argument("--background", default="#ffffff",
+                   help="PNG only: canvas color behind the design")
+    p.add_argument("--comply", action="store_true",
+                   help="enforce the design system before rendering")
+    _add_format_arg(p)
+    _add_system_arg(p)
+    _add_vector_args(p)
+    p.set_defaults(func=cmd_render)
 
     args = parser.parse_args(argv)
     return args.func(args)

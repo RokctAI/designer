@@ -13,6 +13,15 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from designer.matrix import (
+    IDENTITY,
+    Matrix,
+    UnsupportedTransform,
+    is_identity,
+    multiply,
+    parse_transform,
+)
+
 SVG_NS = "http://www.w3.org/2000/svg"
 
 _STYLE_PROPS = (
@@ -73,7 +82,15 @@ class Document:
     height: float
     shapes: list[Shape] = field(default_factory=list)
     defs: list[GradientDef] = field(default_factory=list)
+    # Verbatim <defs> children we preserve but do not analyze
+    # (clipPath/mask/filter/pattern/marker), so rendering stays faithful.
+    raw_defs: list[str] = field(default_factory=list)
     source: str | None = None  # original file path, if any
+    # Fidelity notes: constructs the parser dropped or flattened, and
+    # pipeline capability gaps (e.g. OCR unavailable). Surfaced as
+    # findings by the engine.capability rule so audits are never
+    # silently blind to what they could not see.
+    warnings: list[str] = field(default_factory=list)
 
     def gradient_by_ref(self, paint: str | None) -> GradientDef | None:
         """Resolve a fill/stroke value like "url(#g0)" to its def."""
@@ -109,28 +126,13 @@ def _shape_area(shape: Shape, doc_w: float, doc_h: float) -> float | None:
             return 3.14159 * r * r
     if shape.tag == "path":
         d = shape.attrs.get("d", "")
-        pts = _path_points(d)
-        if len(pts) >= 3:
-            return abs(_shoelace(pts))
+        try:
+            from designer.path import path_area
+
+            return path_area(d)
+        except ValueError:
+            return None
     return None
-
-
-def _path_points(d: str) -> list[tuple[float, float]]:
-    """Absolute-coordinate vertices of a path (M/L/C endpoints only) —
-    enough for area estimates on the paths this package emits."""
-    nums = [float(n) for n in re.findall(r"-?\d+(?:\.\d+)?(?:e-?\d+)?", d)]
-    pts = list(zip(nums[0::2], nums[1::2]))
-    return pts
-
-
-def _shoelace(pts: list[tuple[float, float]]) -> float:
-    area = 0.0
-    n = len(pts)
-    for i in range(n):
-        x1, y1 = pts[i]
-        x2, y2 = pts[(i + 1) % n]
-        area += x1 * y2 - x2 * y1
-    return area / 2.0
 
 
 def shape_area(shape: Shape, doc: Document) -> float | None:
@@ -160,6 +162,22 @@ def _parse_length(raw: str | None, default: float) -> float:
     return float(m.group(1)) if m else default
 
 
+_SHAPE_TAGS = (
+    "path", "rect", "circle", "ellipse", "line", "polygon", "polyline",
+    "text", "image",
+)
+# Kept verbatim in <defs> so rendering stays faithful even though the
+# audit cannot reason about them.
+_PRESERVED_DEF_TAGS = ("clipPath", "mask", "filter", "pattern", "marker")
+
+_CSS_PROPS = _STYLE_PROPS + (
+    "text-anchor", "font-weight", "font-style", "stroke-linecap",
+    "stroke-linejoin", "stroke-dasharray", "fill-rule",
+)
+
+MAX_USE_DEPTH = 6
+
+
 def parse_svg(path: str | Path) -> Document:
     tree = ET.parse(str(path))
     root = tree.getroot()
@@ -174,53 +192,258 @@ def parse_svg(path: str | Path) -> Document:
 
     doc = Document(width=width, height=height, source=str(path))
 
-    def walk(element: ET.Element, inherited: dict[str, str]) -> None:
-        style = dict(inherited)
-        for prop in _STYLE_PROPS:
-            if element.get(prop) is not None:
-                style[prop] = element.get(prop)  # type: ignore[assignment]
-        if element.get("style"):
-            style.update(_parse_style_attr(element.get("style")))  # type: ignore[arg-type]
+    def warn(message: str) -> None:
+        if message not in doc.warnings:
+            doc.warnings.append(message)
 
+    # --- pre-pass: stylesheet, id index (for <use>), preserved defs ---
+    from designer.css import parse_stylesheet
+
+    css_text = []
+    id_index: dict[str, ET.Element] = {}
+    for element in root.iter():
         tag = _strip_ns(element.tag)
-        if tag in ("g", "svg"):
+        if tag == "style":
+            css_text.append("".join(element.itertext()))
+        element_id = element.get("id")
+        if element_id:
+            id_index.setdefault(element_id, element)
+    sheet = parse_stylesheet("\n".join(css_text))
+    for selector in sheet.skipped:
+        warn(
+            f"CSS selector {selector!r} is not supported — styling it applies "
+            "was not evaluated by this audit"
+        )
+
+    def resolve_style(element: ET.Element, inherited: dict[str, str]) -> dict[str, str]:
+        """Cascade: inherited < stylesheet < presentation attrs < style attr."""
+        style = dict(inherited)
+        style.update(
+            sheet.declarations_for(
+                _strip_ns(element.tag), element.get("class"), element.get("id")
+            )
+        )
+        for prop in _CSS_PROPS:
+            value = element.get(prop)
+            if value is not None:
+                style[prop] = value
+        if element.get("style"):
+            style.update(_parse_style_attr(element.get("style")))
+        return style
+
+    def walk(
+        element: ET.Element,
+        inherited: dict[str, str],
+        matrix: Matrix,
+        depth: int = 0,
+    ) -> None:
+        tag = _strip_ns(element.tag)
+        style = resolve_style(element, inherited)
+
+        try:
+            own_matrix = parse_transform(element.get("transform"))
+        except UnsupportedTransform as exc:
+            warn(f"<{tag}> transform not understood ({exc}); geometry left unevaluated")
+            own_matrix = IDENTITY
+        combined = multiply(matrix, own_matrix)
+
+        if tag in ("g", "svg", "a"):
             for child in element:
-                walk(child, style)
+                walk(child, style, combined, depth)
             return
+
         if tag == "defs":
             for child in element:
-                _parse_gradient(child, doc)
+                child_tag = _strip_ns(child.tag)
+                if child_tag in ("linearGradient", "radialGradient"):
+                    _parse_gradient(child, doc)
+                elif child_tag in _PRESERVED_DEF_TAGS:
+                    doc.raw_defs.append(_serialize_element(child))
+                    warn(
+                        f"<{child_tag}> preserved but not evaluated — shapes using "
+                        "it render correctly, but the audit cannot see its effect"
+                    )
+                elif child_tag in ("symbol", "g", "rect", "circle", "path", "ellipse",
+                                   "polygon", "polyline", "line", "text", "image"):
+                    pass  # a <use> prototype; instantiated where referenced
+                else:
+                    warn(f"unsupported <defs> content <{child_tag}> dropped")
             return
+
         if tag in ("linearGradient", "radialGradient"):
             _parse_gradient(element, doc)
             return
-        if tag in ("metadata", "title", "desc", "style", "script"):
+
+        if tag in _PRESERVED_DEF_TAGS:
+            doc.raw_defs.append(_serialize_element(element))
             return
-        if tag in (
-            "path",
-            "rect",
-            "circle",
-            "ellipse",
-            "line",
-            "polygon",
-            "polyline",
-            "text",
-            "image",
-        ):
+
+        if tag == "style":
+            return  # already folded into the cascade
+
+        if tag == "script":
+            warn("<script> element removed")
+            return
+
+        if tag == "use":
+            href = element.get("href") or element.get("{http://www.w3.org/1999/xlink}href")
+            if not href or not href.startswith("#"):
+                warn("<use> without a local reference dropped")
+                return
+            target = id_index.get(href[1:])
+            if target is None:
+                warn(f"<use> references missing id {href!r}")
+                return
+            if depth >= MAX_USE_DEPTH:
+                warn("<use> nesting too deep; instantiation stopped")
+                return
+            offset = parse_transform(
+                f"translate({_parse_length(element.get('x'), 0.0)} "
+                f"{_parse_length(element.get('y'), 0.0)})"
+            )
+            use_matrix = multiply(combined, offset)
+            target_tag = _strip_ns(target.tag)
+            if target_tag in ("symbol", "g"):
+                for child in target:
+                    walk(child, style, use_matrix, depth + 1)
+            else:
+                walk(target, style, use_matrix, depth + 1)
+            return
+
+        if tag in ("metadata", "title", "desc", "foreignObject"):
+            if tag == "foreignObject":
+                warn("<foreignObject> dropped — HTML content is not auditable")
+            return
+
+        if tag in _SHAPE_TAGS:
             attrs: dict[str, str] = {}
             for key, value in element.attrib.items():
                 key = _strip_ns(key)
-                if key != "style":
-                    attrs[key] = value
-            # Inherited/style-attr values win only where the element
-            # didn't set its own presentation attribute.
+                if key in ("style", "transform", "class"):
+                    continue
+                if not _safe_attr(key, value):
+                    warn(f"unsafe attribute {key!r} stripped from <{tag}>")
+                    continue
+                attrs[key] = value
             for prop, value in style.items():
-                attrs.setdefault(prop, value)
-            text_content = "".join(element.itertext()).strip() if tag == "text" else ""
-            doc.shapes.append(Shape(tag=tag, attrs=attrs, text=text_content))
+                if _safe_attr(prop, value):
+                    attrs.setdefault(prop, value)
 
-    walk(root, {})
+            text_content = ""
+            if tag == "text":
+                text_content = " ".join("".join(element.itertext()).split())
+                if any(_strip_ns(child.tag) == "tspan" for child in element):
+                    warn(
+                        "multi-span <text> flattened to a single line — "
+                        "line breaks and per-span styling were lost"
+                    )
+
+            shape = Shape(tag=tag, attrs=attrs, text=text_content)
+            _place(shape, combined, doc, warn)
+            doc.shapes.append(shape)
+            return
+
+        warn(f"unknown element <{tag}> dropped")
+
+    walk(root, {}, IDENTITY)
+    _bake_pending(doc)
     return doc
+
+
+def _place(shape: Shape, matrix: Matrix, doc: Document, warn) -> None:
+    """Record the shape's effective matrix. Baking happens after the
+    walk so gradient sharing can be accounted for."""
+    if not is_identity(matrix):
+        shape.attrs["transform"] = _matrix_to_string(matrix)
+
+
+def _bake_pending(doc: Document) -> None:
+    """Bake each shape's transform into its geometry where that is exact.
+
+    Shapes that cannot be represented axis-aligned (rotated rects, text)
+    keep their transform attribute, and gradients shared by shapes with
+    different transforms are left alone rather than distorted.
+    """
+    from designer.transform import bake_gradient, bake_shape
+
+    usage: dict[int, list[int]] = {}
+    for i, shape in enumerate(doc.shapes):
+        for prop in ("fill", "stroke"):
+            grad = doc.gradient_by_ref(shape.get(prop))
+            if grad is not None:
+                usage.setdefault(id(grad), []).append(i)
+
+    for i, shape in enumerate(doc.shapes):
+        raw = shape.attrs.get("transform")
+        if not raw:
+            continue
+        try:
+            matrix = parse_transform(raw)
+        except UnsupportedTransform:
+            continue
+        if is_identity(matrix):
+            del shape.attrs["transform"]
+            continue
+
+        grads = [
+            doc.gradient_by_ref(shape.get(prop))
+            for prop in ("fill", "stroke")
+        ]
+        grads = [g for g in grads if g is not None]
+        if any(len(usage.get(id(g), [])) > 1 for g in grads):
+            doc.warnings.append(
+                f"shape {i} (<{shape.tag}>) keeps a transform because its gradient "
+                "is shared with differently-transformed shapes"
+            )
+            continue
+
+        snapshot = dict(shape.attrs)
+        if bake_shape(shape, matrix):
+            del shape.attrs["transform"]
+            for g in grads:
+                bake_gradient(g, matrix)
+        else:
+            shape.attrs.clear()
+            shape.attrs.update(snapshot)
+            doc.warnings.append(
+                f"shape {i} (<{shape.tag}>) has a rotated or non-uniform transform "
+                "that cannot be baked into its geometry; grid and margin checks on "
+                "this shape are approximate"
+            )
+
+
+def _matrix_to_string(m: Matrix) -> str:
+    return "matrix({})".format(
+        " ".join(f"{v:.6f}".rstrip("0").rstrip(".") or "0" for v in m)
+    )
+
+
+def _serialize_element(element: ET.Element) -> str:
+    """Verbatim XML for a preserved def, with namespaces normalized and
+    scriptable attributes removed."""
+    for node in element.iter():
+        node.tag = _strip_ns(node.tag)
+        for key in list(node.attrib):
+            clean = _strip_ns(key)
+            value = node.attrib.pop(key)
+            if _safe_attr(clean, value):
+                node.attrib[clean] = value
+    return ET.tostring(element, encoding="unicode").strip()
+
+
+_SAFE_HREF = re.compile(r"^\s*(data:image/|https?:|/|\.{0,2}/|[\w.\-]+$)", re.IGNORECASE)
+
+
+def _safe_attr(key: str, value: str) -> bool:
+    """Attribute security policy: no event handlers, no scriptable or
+    non-image href targets. Everything the engine writes back out has
+    passed through this filter."""
+    lowered = key.lower()
+    if lowered.startswith("on"):
+        return False
+    if lowered in ("href", "xlink:href"):
+        return bool(_SAFE_HREF.match(value))
+    return True
 
 
 def _parse_gradient(element: ET.Element, doc: Document) -> None:
@@ -259,8 +482,10 @@ def serialize(doc: Document, pretty: bool = True) -> str:
             ns=SVG_NS, w=doc.width, h=doc.height
         )
     ]
-    if doc.defs:
+    if doc.defs or doc.raw_defs:
         lines.append("  <defs>")
+        for raw in doc.raw_defs:
+            lines.append("    " + raw)
         for grad in doc.defs:
             tag = "linearGradient" if grad.kind == "linear" else "radialGradient"
             coords = " ".join(f'{k}="{v:.2f}"' for k, v in grad.coords.items())

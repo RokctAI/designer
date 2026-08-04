@@ -17,9 +17,31 @@ v2 incorporates the publisher's decisions:
 - **Logo policy by size**: small units drop the logo rather than
   compromise the text; declared per slot, enforced by the renderer.
 
-Engine support note: the engine parses, grid-snaps and format-rescales
-`<image>` elements (product photos embedded in the SVG) while treating
-their pixel content as opaque — this landed with this spec revision.
+**Engine support (already built — this spec is now implementation, not
+research).** `designer.template` implements §3 in full: slot filling,
+`data-fit` shrink-to-box using real glyph metrics, size-responsive slot
+dropping with `data-freed-to`, and the composite item grid with its
+legibility floor and `UnitTooSmall` upgrade error. `designer.render`
+writes press-ready vector PDF (embedded fonts, shadings, images,
+optional CMYK) and PNG. Product photos embed as `<image>`, which the
+engine grid-snaps and rescales while treating pixel content as opaque.
+Print formats additionally enforce bleed, press minimum stroke and ink
+coverage. The Frappe layer therefore only has to store data and call:
+
+```python
+from designer import ComplianceEngine, Item, TemplateData, render_template, render_pdf
+from designer.svg import parse_svg
+
+doc = render_template(parse_svg(template_path), TemplateData(
+    fields={"headline": ..., "offer": ..., "contact": ...},
+    palette=advertiser_palette,          # [] is fine — see §2.2
+    images={"logo": logo_href},
+    items=[Item(title=..., price=..., badge=..., image_href=...)],
+), system, cell_template=parse_svg(cell_path))
+
+report = ComplianceEngine(system, format=unit_spec).comply(doc)
+render_pdf(doc, out_path, dpi=300, cmyk=True)
+```
 
 ## 1. Use cases
 

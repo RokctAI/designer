@@ -26,6 +26,29 @@ from designer.svg import Document, GradientDef, Shape
 Point = tuple[float, float]
 
 
+class ComplexityError(ValueError):
+    """Input is too complex to vectorize meaningfully (photographic or
+    heavily textured). Raised instead of producing megabytes of noisy
+    micro-paths; callers surface the message to the user."""
+
+    def __init__(self, density: float, limit: float, photographic: bool = False):
+        self.density = density
+        self.limit = limit
+        if photographic:
+            message = (
+                f"this image is {density:.0%} photographic (limit {limit:.0%}) — it is a "
+                "photo, not a design. Vectorizing it would produce a huge, meaningless "
+                "file. Use it as an image, or pass --force to trace it anyway."
+            )
+        else:
+            message = (
+                f"input is too textured to vectorize meaningfully (edge density "
+                f"{density:.2f} exceeds {limit:.2f}). Use flatter artwork, reduce "
+                "--colors, lower --max-dim, or pass --force to override."
+            )
+        super().__init__(message)
+
+
 @dataclass
 class VectorizeOptions:
     n_colors: int = 6
@@ -41,6 +64,15 @@ class VectorizeOptions:
     # Detected text is re-emitted as editable <text>, never as outlines.
     extract_text: bool | None = None
     min_text_confidence: float = 60.0
+    ocr_lang: str = "eng"  # tesseract language(s), e.g. "eng+fra"
+    # Hybrid output: embed photographic regions as <image> instead of
+    # tracing them, so a poster with a photo in it works properly.
+    hybrid: bool = True
+    # Complexity guard: refuse inputs that are photographs end to end
+    # (after hybrid extraction) rather than emitting noise.
+    max_edge_density: float = 0.4
+    max_photo_coverage: float = 0.85
+    force: bool = False  # override the complexity guard
 
 
 # ------------------------------------------------------------- tracing
@@ -365,6 +397,7 @@ def vectorize_file(path: str | Path, options: VectorizeOptions | None = None) ->
     img = load_image(path, max_dim=options.max_dim)
 
     spans = []
+    ocr_note = None
     want_text = options.extract_text
     if want_text is None:
         from designer.text import ocr_available
@@ -373,7 +406,12 @@ def vectorize_file(path: str | Path, options: VectorizeOptions | None = None) ->
     if want_text:
         from designer.text import extract_text
 
-        img, spans = extract_text(img, options.min_text_confidence)
+        img, spans = extract_text(img, options.min_text_confidence, lang=options.ocr_lang)
+    elif options.extract_text is None:
+        ocr_note = (
+            "OCR unavailable (tesseract not installed): any text in the image "
+            "remains as vector outlines instead of editable <text>"
+        )
 
     internal_colors = (
         max(options.n_colors, options.gradient_bands)
@@ -381,21 +419,72 @@ def vectorize_file(path: str | Path, options: VectorizeOptions | None = None) ->
         else options.n_colors
     )
     qimg = quantize(img, n_colors=internal_colors)
-    gradients = detect_gradients(qimg) if options.detect_gradients else []
+
+    photo_regions = []
+    if options.hybrid:
+        from designer.hybrid import extract_photo_regions, photo_coverage
+
+        photo_regions, masked = extract_photo_regions(img, qimg.labels)
+        coverage = photo_coverage(photo_regions, qimg.width, qimg.height)
+        if coverage > options.max_photo_coverage and not options.force:
+            raise ComplexityError(coverage, options.max_photo_coverage, photographic=True)
+        if photo_regions:
+            qimg.labels = masked
+            total = max(1, int((masked >= 0).sum()))
+            qimg.coverage = [
+                float((masked == i).sum()) / total for i in range(len(qimg.palette))
+            ]
+
+    labels = qimg.labels
+    flat = labels >= 0
+    if flat.sum() > 0:
+        transitions = int(((labels[:, 1:] != labels[:, :-1]) & flat[:, 1:]).sum()) + int(
+            ((labels[1:, :] != labels[:-1, :]) & flat[1:, :]).sum()
+        )
+        density = transitions / max(1, int(flat.sum()))
+        if density > options.max_edge_density and not options.force:
+            raise ComplexityError(density, options.max_edge_density)
+
+    original = np.asarray(img.convert("RGB"), dtype=np.uint8)
+    gradients = (
+        detect_gradients(qimg, original=original) if options.detect_gradients else []
+    )
     doc = vectorize_quantized(qimg, options, gradients)
 
-    for span in spans:
+    # Photos sit above the traced background, below any text.
+    for region in photo_regions:
         doc.shapes.append(
             Shape(
-                tag="text",
+                tag="image",
                 attrs={
-                    "x": f"{span.x:g}",
-                    "y": f"{span.y:g}",
-                    "font-size": f"{span.font_size:g}",
-                    "fill": to_hex(span.color),
+                    "x": f"{region.x:g}",
+                    "y": f"{region.y:g}",
+                    "width": f"{region.width:g}",
+                    "height": f"{region.height:g}",
+                    "href": region.href,
+                    "preserveAspectRatio": "xMidYMid slice",
                 },
-                text=span.text,
             )
         )
+    if photo_regions:
+        doc.warnings.append(
+            f"{len(photo_regions)} photographic region(s) embedded as raster rather "
+            "than vectorized; their content is not audited for brand compliance"
+        )
+    if ocr_note:
+        doc.warnings.append(ocr_note)
+
+    for span in spans:
+        attrs = {
+            "x": f"{span.x:g}",
+            "y": f"{span.y:g}",
+            "font-size": f"{span.font_size:g}",
+            "fill": to_hex(span.color),
+        }
+        if abs(getattr(span, "angle", 0.0)) > 0.5:
+            attrs["transform"] = (
+                f"rotate({span.angle:.2f} {span.x:g} {span.y:g})"
+            )
+        doc.shapes.append(Shape(tag="text", attrs=attrs, text=span.text))
     doc.source = str(path)
     return doc

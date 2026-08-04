@@ -96,14 +96,21 @@ def test_comply_fixes_and_improves_score():
 
 
 def test_comply_is_idempotent():
+    """A second pass must apply no further fixes. Advisory findings
+    (report-only rules like layout balance) legitimately persist — they
+    describe judgment calls, not violations the engine can repair."""
     engine = ComplianceEngine(load_system())
     doc = build_doc()
     engine.comply(doc)
+    snapshot = [dict(s.attrs) for s in doc.shapes]
     second = engine.comply(doc)
-    open_findings = [f for f in second.findings if not f.fixed]
     assert second.fixed_count == 0
-    assert not open_findings
-    assert second.score == 100
+    assert [dict(s.attrs) for s in doc.shapes] == snapshot  # nothing moved
+    fixable = [
+        f for f in second.findings
+        if not f.fixed and f.severity is not Severity.INFO
+    ]
+    assert not fixable
 
 
 def test_contrast_fix_recolors_text():
