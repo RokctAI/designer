@@ -1,0 +1,64 @@
+# Supacharge expo kit — OPTION B ("the Simplifier's whiteboard": cream + marker red).
+# *** PENDING OWNER DECISION *** — this is the alternative direction to
+# supacharge.yaml (option A). The A-vs-B choice is open; do not treat this file
+# as the brand standard until the owner picks B.
+# Source of truth: RokctAI/agent lms/team/marketing/expo-option-b/branding-b.json
+# (PR #13). Every value below is copied or derived from that file; the palette
+# traces to replay/docs/specs/replaysdk-spec.md §Style Modes ("big_john"
+# whiteboard mode), plans_sheet.dart:295 (light surface pair) and
+# lms/docs/ui-reference/styles.css greys, per branding-b.json palette.source.
+name: Supacharge (Option B — whiteboard, pending owner decision)
+
+color:
+  # branding-b.json palette.tokens, print/expo-relevant subset.
+  # Omitted on purpose:
+  #   line_soft - rgba(28,28,28,.08): alpha hairline, engine tokens are opaque
+  #   line      - same hex as card-alt (#ECECEF); one token carries it
+  #   live/mint/blue - branding-b.json marks all three app-UI-only on print
+  #     (live "never appears on option-B assets"; print blue is accent-2 below).
+  tokens:
+    bg: { hex: "#F8F4E8", role: surface }          # the Simplifier's cream whiteboard ground
+    card: { hex: "#F9F9FB", role: surface }        # card / panel surface (cool white)
+    card-alt: { hex: "#ECECEF", role: surface }    # alternate surface, borders and dividers
+    text: { hex: "#1C1C1C", role: ink }            # primary text — the dark marker ink
+    text-muted: { hex: "#5a5a5a", role: text }     # secondary text
+    text-dim: { hex: "#9a9a9a", role: text }       # tertiary/dimmest text
+    accent: { hex: "#E84040", role: accent }       # warm marker red — ONE red element per surface
+    accent-2: { hex: "#1E90FF", role: secondary }  # marker blue — colour-coding only, never a second hero
+    accent-ink: { hex: "#FFFFFF", role: ink }      # text on red fills
+  # branding-b.json states one-red-per-surface + restrained blue but no numeric
+  # cap; 6 is the engine default, kept as-is.
+  max_colors: 6
+  snap_warning_distance: 0.18
+
+gradient:
+  # branding-b.json design_rule "Warm, light, hand-built. Ink leads." +
+  # logo.spec.never "Never ... gradient-fill". Flat marker fills only.
+  allowed: false
+
+typography:
+  # branding-b.json typography: "Option B keeps Inter: the typeface is a brand
+  # fact, not a palette choice." Fallback stack quoted from styles.css there.
+  fonts:
+    - Inter
+    - -apple-system
+    - Segoe UI
+    - Roboto
+    - sans-serif
+  # No numeric type scale in branding-b.json; engine default applies.
+
+# Print production. px values are in the 300dpi print space used by the
+# kit's print formats (a1-poster, pullup-banner in designer/formats.py).
+print:
+  bleed: 35            # 3mm bleed (poster/flyer briefs): 3mm x 300dpi / 25.4 = 35.4px
+  min_stroke: 1        # press-safe hairline floor ~0.25pt at 300dpi (0.25/72 x 300 = 1.04px)
+  max_ink_coverage: 300  # engine default; branding-b.json print_note notes the light
+                         # ground avoids solid-flood dark coverage entirely
+
+accessibility:
+  # WCAG AA floors (engine defaults) kept explicit; branding-b.json's own
+  # typography rule — muted text "#5a5a5a ... never lighter, or it dies under
+  # expo-hall lighting" — is exactly what the contrast check enforces on cream.
+  min_contrast_text: 4.5
+  min_contrast_large_text: 3.0
+  large_text_size: 24
