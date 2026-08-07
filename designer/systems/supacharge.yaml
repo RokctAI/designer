@@ -1,0 +1,62 @@
+# Supacharge expo kit — OPTION A ("the Expert's chalkboard": dark + burnt orange).
+# Source of truth: RokctAI/agent lms/team/marketing/expo/branding.json (merged on main).
+# Every value below is copied or derived from that file; derivations are noted inline.
+# The palette itself traces to lms/docs/ui-reference/styles.css ("SUPACHARGE — v2
+# shared tokens"), per branding.json palette.source.
+name: Supacharge (Option A — dark)
+
+color:
+  # branding.json palette.tokens, print/expo-relevant subset. Roles map the
+  # source's stated role text onto the engine's role vocabulary (surface/ink/
+  # text/accent) so role-aware snapping respects intent.
+  # Omitted on purpose:
+  #   line_soft  - rgba(255,255,255,.08): alpha hairline, engine tokens are opaque
+  #   live/mint/blue - branding.json marks them "app UI only, avoid on print";
+  #     including them would let snapping land expo artwork on app-only colors.
+  tokens:
+    bg: { hex: "#0b0b0b", role: surface }          # page/stand background (near-black)
+    card: { hex: "#161616", role: surface }        # card / panel surface
+    card-alt: { hex: "#1a1a1a", role: surface }    # alternate card surface
+    line: { hex: "#262626", role: surface }        # borders and dividers
+    text: { hex: "#ffffff", role: ink }            # primary text
+    text-muted: { hex: "#9a9a9a", role: text }     # secondary text
+    text-dim: { hex: "#5a5a5a", role: text }       # tertiary/dimmest text
+    accent: { hex: "#e0793c", role: accent }       # THE brand accent — burnt orange, one element per surface
+    accent-ink: { hex: "#2a1204", role: ink }      # text on accent fills
+  # branding.json states "ONE accent colour, used sparingly" but no numeric cap;
+  # 6 is the engine default, kept as-is (covers bg + surface + two text greys +
+  # accent + accent-ink on a typical asset).
+  max_colors: 6
+  snap_warning_distance: 0.18
+
+gradient:
+  # branding.json design_rule "Plain, dark, minimal" + logo.spec.never
+  # "Never ... gradient-fill". Flat token fills only.
+  allowed: false
+
+typography:
+  # branding.json typography.primary = Inter; the rest is the fallback_stack
+  # from lms/docs/ui-reference/styles.css quoted there.
+  fonts:
+    - Inter
+    - -apple-system
+    - Segoe UI
+    - Roboto
+    - sans-serif
+  # No numeric type scale exists in branding.json (only weight roles), so the
+  # engine default scale applies — deliberately not overridden here.
+
+# Print production. px values are in the 300dpi print space used by the
+# kit's print formats (a1-poster, pullup-banner in designer/formats.py).
+print:
+  bleed: 35            # 3mm bleed (poster.json / flyer.json briefs): 3mm x 300dpi / 25.4 = 35.4px
+  min_stroke: 1        # press-safe hairline floor ~0.25pt at 300dpi (0.25/72 x 300 = 1.04px)
+  max_ink_coverage: 300  # engine default for coated stock; branding.json print_note
+                         # defers rich-black builds "at the printer's discretion"
+
+accessibility:
+  # No contrast figures exist in branding.json; WCAG AA floors (engine defaults)
+  # kept explicit so print proofs of white/#9a9a9a text on #0b0b0b are checked.
+  min_contrast_text: 4.5
+  min_contrast_large_text: 3.0
+  large_text_size: 24
