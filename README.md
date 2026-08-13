@@ -298,6 +298,23 @@ pip install -e . pytest
 python -m pytest tests/ -q
 ```
 
+## Agency workflow: seeds to identity drop
+
+The full agency pipeline — seed colours in; system YAML, three proof
+variations, press PDFs (CMYK + marks, front/back multi-page) and the
+brand manual out:
+
+```bash
+python examples/agency_demo.py "#0F4C81" "#F5A623" \
+    --name "Demo Trading (Pty) Ltd" -o demo-out/
+designer brandbook --system demo-out/system.yaml \
+    --logo demo-out/logo.svg -o demo-out/brandbook.pdf
+```
+
+Walkthrough in [docs/AGENCY_WORKFLOW.md](docs/AGENCY_WORKFLOW.md); the
+role-driven template pack is documented in
+[examples/templates/agency/README.md](examples/templates/agency/README.md).
+
 ## Agency operations layer
 
 `design_studio/` is a Frappe app fragment (agency-as-a-service shell around this engine): see [design_studio/README.md](design_studio/README.md).

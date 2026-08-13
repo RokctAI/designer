@@ -323,18 +323,19 @@ def _typography_pages(system: DesignSystem, style: _Style) -> list[Document]:
 
     for size in sorted(system.type_scale):
         sample = f"Aa {size:g}px"
-        width = measure(sample, style.family, size, bold=True).width
-        row = size * 1.35 + GRID
+        # A size too wide to show at actual size on A4 (large-format
+        # scales) becomes a compact spec line instead.
+        fits = measure(sample, style.family, size, bold=True).width <= CONTENT_W
+        row = (size * 1.1 if fits else 2.5 * GRID) + GRID
         if page.y + row > PAGE_H - MARGIN - 2 * GRID:
             pages.append(page.doc)
             page = _Page(style, footer=footer)
             page.heading("Typography (continued)")
-        page.y += size * 1.1
-        if width <= CONTENT_W:
+        page.y += row - GRID
+        if fits:
             page.text(MARGIN, page.y, sample, size=size, fill=style.ink,
                       bold=True)
         else:
-            # Too wide to show at size on A4: record it as a spec line.
             page.text(MARGIN, page.y, f"{size:g}px — larger than this page; "
                       "use at large-format sizes only", size=12)
         page.y += GRID
