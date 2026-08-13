@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 11811 4724.4" width="11811" height="4724.4">
+  <!-- Signboard front, 2000x800mm at 150dpi, 3mm bleed. Bold and
+       minimal: name and phone only, sized for roadside legibility. -->
+  <rect x="-17.7" y="-17.7" width="11846.4" height="4759.8" fill="#1a56db" data-token="advertiser-1"/>
+  <rect x="-17.7" y="-17.7" width="360" height="4759.8" fill="#f59e0b" data-token="advertiser-2"/>
+  <image data-slot="logo" x="760" y="1362" width="2000" height="2000" href=""/>
+  <text data-slot="business-name" data-fit="shrink" data-fit-width="8200" data-fit-height="1500"
+        x="3160" y="2450" font-size="1250" font-weight="bold"
+        fill="#ffffff" data-token="advertiser-5" font-family="DejaVu Sans">Business Name</text>
+  <text data-slot="phone" data-fit="shrink" data-fit-width="8200" data-fit-height="900"
+        x="3160" y="3600" font-size="560" fill="#ffffff"
+        data-token="advertiser-5" font-family="DejaVu Sans">Phone</text>
+</svg>

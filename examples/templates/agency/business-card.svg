@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1063 590.6" width="1063" height="590.6">
+  <!-- Business card front, 90x50mm trim at 300dpi. Backgrounds extend
+       3mm (35.4px) past the trim for bleed; render with bleed=35.4.
+       Palette roles: advertiser-1 primary, 2 accent, 3 ink, 4 surface,
+       5 on-primary, 6 paper. -->
+  <rect x="-35.4" y="-35.4" width="1133.8" height="661.4" fill="#ffffff" data-token="advertiser-6"/>
+  <rect x="-35.4" y="444" width="1133.8" height="16" fill="#f59e0b" data-token="advertiser-2"/>
+  <rect x="-35.4" y="460" width="1133.8" height="166" fill="#1a56db" data-token="advertiser-1"/>
+  <image data-slot="logo" x="64" y="56" width="140" height="140" href=""/>
+  <text data-slot="business-name" data-fit="shrink" data-fit-width="935" data-fit-height="80"
+        x="64" y="300" font-size="64" font-weight="bold" fill="#111827"
+        data-token="advertiser-3" font-family="DejaVu Sans">Business Name</text>
+  <text data-slot="tagline" data-fit="shrink" data-fit-width="935" data-fit-height="48"
+        x="64" y="380" font-size="34" fill="#1a56db" data-token="advertiser-1"
+        font-family="DejaVu Sans">Tagline</text>
+  <text data-slot="phone" data-fit="shrink" data-fit-width="440" data-fit-height="40"
+        x="64" y="558" font-size="28" font-weight="bold" fill="#ffffff"
+        data-token="advertiser-5" font-family="DejaVu Sans">Phone</text>
+  <text data-slot="email" data-fit="shrink" data-fit-width="440" data-fit-height="40"
+        x="999" y="558" text-anchor="end" font-size="28" fill="#ffffff"
+        data-token="advertiser-5" font-family="DejaVu Sans">Email</text>
+</svg>

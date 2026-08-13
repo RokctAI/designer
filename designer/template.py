@@ -70,6 +70,53 @@ class TemplateData:
     images: dict[str, str] = field(default_factory=dict)  # slot -> href
 
 
+# Role order the agency template pack binds to: data-token="advertiser-N"
+# takes the Nth role here, so any derived design system restyles every
+# template without touching the SVG.
+AGENCY_PALETTE_ROLES = ("primary", "accent", "ink", "surface", "on-primary", "paper")
+
+# Type scale used by the agency template pack (px at press dpi). Every
+# data-fit slot in examples/templates/agency/ declares a size from this
+# ladder, so shrink-fitting steps through print-appropriate sizes
+# instead of the screen-oriented default scale. Install it via a
+# derive_system override: {"typography": {"scale": AGENCY_TYPE_SCALE}}.
+AGENCY_TYPE_SCALE = [
+    24, 28, 32, 34, 40, 48, 56, 64, 80, 96, 110, 130, 160, 200, 240,
+    300, 380, 450, 560, 700, 760, 800, 900, 1050, 1150, 1250,
+]
+
+_ROLE_FALLBACKS = {
+    "accent": ("primary",),
+    "ink": ("text",),
+    "text": ("ink",),
+    "surface": ("paper", "background"),
+    "paper": ("surface", "background"),
+    "on-primary": ("paper", "surface"),
+}
+
+
+def palette_for_system(system: DesignSystem) -> list[str]:
+    """Ordered template palette from a design system's tokens, following
+    :data:`AGENCY_PALETTE_ROLES`. Each role resolves by token name first,
+    then by declared role, then through sensible fallbacks, so systems
+    that predate a role (e.g. no ``on-primary``) still produce a full
+    palette."""
+
+    by_name = {t.name.lower(): t for t in system.colors}
+
+    def resolve(role: str):
+        for candidate in (role,) + _ROLE_FALLBACKS.get(role, ()):
+            token = by_name.get(candidate)
+            if token is not None:
+                return token
+            for t in system.colors:
+                if t.role == candidate:
+                    return t
+        return system.colors[0]
+
+    return [resolve(role).hex for role in AGENCY_PALETTE_ROLES]
+
+
 def _slot(shape: Shape) -> str | None:
     return shape.attrs.get("data-slot")
 

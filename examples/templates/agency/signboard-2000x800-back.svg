@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 11811 4724.4" width="11811" height="4724.4">
+  <!-- Signboard back, 2000x800mm at 150dpi, 3mm bleed. Light variant:
+       ink on surface with an accent rule, phone dominant. -->
+  <rect x="-17.7" y="-17.7" width="11846.4" height="4759.8" fill="#f3f4f6" data-token="advertiser-4"/>
+  <text data-slot="tagline" data-fit="shrink" data-fit-width="11000" data-fit-height="560"
+        x="5905.5" y="1150" text-anchor="middle" font-size="450"
+        fill="#111827" data-token="advertiser-3" font-family="DejaVu Sans">Tagline</text>
+  <text data-slot="business-name" data-fit="shrink" data-fit-width="11000" data-fit-height="1400"
+        x="5905.5" y="2450" text-anchor="middle"
+        font-size="1150" font-weight="bold" fill="#111827" data-token="advertiser-3"
+        font-family="DejaVu Sans">Business Name</text>
+  <rect x="4405.5" y="2750" width="3000" height="110" fill="#f59e0b" data-token="advertiser-2"/>
+  <text data-slot="phone" data-fit="shrink" data-fit-width="11000" data-fit-height="1000"
+        x="5905.5" y="3850" text-anchor="middle" font-size="700"
+        font-weight="bold" fill="#1a56db" data-token="advertiser-1"
+        font-family="DejaVu Sans">Phone</text>
+</svg>

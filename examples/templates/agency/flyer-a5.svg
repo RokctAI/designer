@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1748 2480.3" width="1748" height="2480.3">
+  <!-- A5 flyer, 148x210mm trim at 300dpi, 3mm bleed. -->
+  <rect x="-35.4" y="-35.4" width="1818.8" height="2551.1" fill="#f3f4f6" data-token="advertiser-4"/>
+  <rect x="-35.4" y="-35.4" width="1818.8" height="656" fill="#1a56db" data-token="advertiser-1"/>
+  <rect x="-35.4" y="620.6" width="1818.8" height="36" fill="#f59e0b" data-token="advertiser-2"/>
+  <image data-slot="logo" x="124" y="96" width="260" height="260" href=""/>
+  <text data-slot="business-name" data-fit="shrink" data-fit-width="1500" data-fit-height="190"
+        x="124" y="540" font-size="160" font-weight="bold"
+        fill="#ffffff" data-token="advertiser-5" font-family="DejaVu Sans">Business Name</text>
+  <text data-slot="tagline" data-fit="shrink" data-fit-width="1500" data-fit-height="120"
+        x="124" y="920" font-size="96" fill="#111827"
+        data-token="advertiser-3" font-family="DejaVu Sans">Tagline</text>
+  <rect x="124" y="1020" width="360" height="20" fill="#f59e0b" data-token="advertiser-2"/>
+  <rect x="124" y="1880" width="1500" height="420" fill="#ffffff" data-token="advertiser-6"/>
+  <text data-slot="phone" data-fit="shrink" data-fit-width="1370" data-fit-height="80"
+        x="188" y="2010" font-size="64" font-weight="bold"
+        fill="#1a56db" data-token="advertiser-1" font-family="DejaVu Sans">Phone</text>
+  <text data-slot="email" data-fit="shrink" data-fit-width="1370" data-fit-height="72"
+        x="188" y="2125" font-size="56" fill="#111827"
+        data-token="advertiser-3" font-family="DejaVu Sans">Email</text>
+  <text data-slot="address" data-fit="shrink" data-fit-width="1370" data-fit-height="72"
+        x="188" y="2235" font-size="56" fill="#111827"
+        data-token="advertiser-3" font-family="DejaVu Sans">Address</text>
+  <rect x="-35.4" y="2400" width="1818.8" height="115.7" fill="#1a56db" data-token="advertiser-1"/>
+</svg>
