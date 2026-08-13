@@ -75,7 +75,10 @@ def derive_design_system(seed_colors, name, customer=None):
             "palette derivation yet (designer.palette.derive_system) — "
             "upgrade the engine, or create the Design System manually.")
 
-    system_dict = derive_system(seeds)
+    try:
+        system_dict = derive_system(seeds, name=name)
+    except TypeError:
+        system_dict = derive_system(seeds)
     fields = engine_dict_lib.doc_fields_from_engine_dict(system_dict, derived=True)
     fields.update({
         "doctype": "Design System",
