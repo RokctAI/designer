@@ -19,10 +19,12 @@ from designer.tokens import system_from_dict
 
 
 def pdf_streams(data: bytes) -> bytes:
-    """All stream contents, decompressed where Flate-encoded."""
+    """All stream contents, decompressed where Flate-encoded. Streams
+    are sliced by their declared /Length: compressed bytes may contain
+    'endstream' by coincidence."""
     out = b""
-    for m in re.finditer(rb"stream\r?\n(.*?)endstream", data, re.DOTALL):
-        chunk = m.group(1).strip(b"\r\n")
+    for m in re.finditer(rb"/Length (\d+)[^>]*>>\s*stream\r?\n", data):
+        chunk = data[m.end():m.end() + int(m.group(1))]
         try:
             out += zlib.decompress(chunk)
         except zlib.error:
@@ -419,6 +421,93 @@ def test_cli_rejects_multiple_inputs_for_png(tmp_path, capsys):
     assert cli_main(["render", str(svg), str(svg),
                      "-o", str(tmp_path / "x.png")]) == 2
     assert "multiple inputs" in capsys.readouterr().err
+
+
+# --------------------------------------------------- dieline passthrough
+
+
+DIELINE_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">'
+    '<rect x="0" y="0" width="200" height="200" fill="#e01111"/>'
+    '<g id="dieline">'
+    '<rect x="10" y="10" width="180" height="180" fill="none" '
+    'stroke="#ff00ff" stroke-width="0.5"/>'
+    "</g></svg>"
+)
+
+
+def dieline_doc(tmp_path) -> Document:
+    from designer.svg import parse_svg
+
+    path = tmp_path / "die.svg"
+    path.write_text(DIELINE_SVG)
+    return parse_svg(path)
+
+
+def test_dieline_group_is_marked_on_parse(tmp_path):
+    from designer.svg import is_dieline, parse_svg, save
+
+    doc = dieline_doc(tmp_path)
+    flags = [is_dieline(s) for s in doc.shapes]
+    assert flags == [False, True]
+    # Survives a round-trip through the serializer.
+    out = tmp_path / "roundtrip.svg"
+    save(doc, out)
+    again = parse_svg(out)
+    assert [is_dieline(s) for s in again.shapes] == [False, True]
+    # class="dieline" works too
+    p2 = tmp_path / "cls.svg"
+    p2.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">'
+        '<path class="dieline vendor" d="M 0 0 L 10 0 L 10 10 Z" '
+        'stroke="#000" fill="none"/></svg>'
+    )
+    assert is_dieline(parse_svg(p2).shapes[0])
+
+
+def test_rules_never_touch_dielines(tmp_path):
+    from designer.engine import ComplianceEngine
+    from designer.svg import is_dieline
+    from designer.tokens import load_system
+
+    doc = dieline_doc(tmp_path)
+    # Off-palette hairline stroke: PaletteRule/StrokeWidthRule/print
+    # hairline would all rewrite this if it were artwork.
+    engine = ComplianceEngine(load_system(), format="business-card")
+    report = engine.comply(doc)
+    die = next(s for s in doc.shapes if is_dieline(s))
+    assert die.get("stroke") == "#ff00ff"
+    assert die.numeric("stroke-width") == 0.5
+    die_msgs = [f for f in report.findings if "dieline" in (f.message or "")]
+    assert not die_msgs
+    assert len(doc.shapes) == 2  # excluded and re-appended, never dropped
+
+
+def test_dieline_renders_stroke_only_png(tmp_path):
+    from designer.render import render_png
+
+    doc = dieline_doc(tmp_path)
+    img = render_png(doc, None, supersample=1)
+    assert img.getpixel((10, 100)) == (255, 0, 255)   # contour stroked
+    assert img.getpixel((100, 100)) == (224, 17, 17)  # interior untouched
+
+
+def test_dieline_rgb_pdf_uses_dedicated_stroke(tmp_path):
+    doc = dieline_doc(tmp_path)
+    data = render_pdf(doc, tmp_path / "die.pdf").read_bytes()
+    ops = pdf_streams(data)
+    assert b"1.0000 0.0000 1.0000 RG" in ops
+    # Stroke only: the dieline never contributes a fill.
+    assert ops.count(b"f*") == 1  # background rect only
+
+
+def test_dieline_cmyk_pdf_gets_cutcontour_separation(tmp_path):
+    doc = dieline_doc(tmp_path)
+    data = render_pdf(doc, tmp_path / "cut.pdf", cmyk=True).read_bytes()
+    assert b"/Separation /CutContour /DeviceCMYK" in data
+    assert b"/OP true" in data  # overprint so the cut doesn't knock out art
+    ops = pdf_streams(data)
+    assert b"/CSCut CS" in ops and b"1 SCN" in ops
 
 
 def test_cli_marks_default_on_for_print_with_bleed(tmp_path, capsys):

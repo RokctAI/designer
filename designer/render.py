@@ -26,10 +26,14 @@ from PIL import Image, ImageDraw
 from designer.color import RGB, parse_color
 from designer.fonts import first_family, is_bold, resolve_font_file, resolve_with_fallback
 from designer.path import path_subpaths
-from designer.svg import Document, GradientDef, Shape
+from designer.svg import Document, GradientDef, Shape, is_dieline
 
 # 96 CSS px per inch is the reference the whole engine works in.
 CSS_DPI = 96.0
+
+# Dielines render stroke-only in this color on screen output; CMYK PDFs
+# use a Separation "CutContour" spot colorspace instead (magenta alternate).
+DIELINE_RGB = (255, 0, 255)
 
 
 class RenderError(ValueError):
@@ -228,6 +232,14 @@ def _draw_shape(
         _draw_text(canvas, shape, scale, doc)
         return
 
+    if is_dieline(shape):
+        width = (shape.numeric("stroke-width") or 1.0) * scale
+        draw = ImageDraw.Draw(canvas)
+        for ring in _shape_polygons(shape, scale):
+            draw.line(list(ring) + [ring[0]], fill=DIELINE_RGB,
+                      width=max(1, round(width)))
+        return
+
     fill = shape.get("fill")
     if fill and fill.strip().lower() not in ("none", "transparent"):
         rings = _shape_polygons(shape, scale)
@@ -385,6 +397,7 @@ class _PdfWriter:
         self.offset = self.bleed + self.slug
         self.objects: list[bytes] = []
         self.fonts: dict[str, _PdfFont] = {}
+        self.uses_cutcontour = False
         self.images: list[tuple[str, bytes, int, int, str]] = []
         self.shadings: list[tuple[str, GradientDef]] = []
         self.base_dir = (
@@ -512,6 +525,9 @@ class _PdfWriter:
             path_ops = self._path_ops(shape)
             if not path_ops:
                 continue
+            if is_dieline(shape):
+                ops.extend(self._dieline_ops(shape, path_ops))
+                continue
             fill = shape.get("fill")
             grad = doc.gradient_by_ref(fill)
             has_fill = bool(fill) and fill.strip().lower() not in ("none", "transparent")
@@ -536,6 +552,23 @@ class _PdfWriter:
             ops.extend(self._marks_ops())
         ops.append("Q")
         return "\n".join(ops)
+
+    def _dieline_ops(self, shape: Shape, path_ops: str) -> list[str]:
+        """Stroke-only cut contour. In CMYK it strokes a Separation
+        'CutContour' spot color with overprint on, so the RIP can pull
+        the cut path without knocking out the artwork beneath."""
+        width = shape.numeric("stroke-width") or 1.0
+        if self.cmyk:
+            self.uses_cutcontour = True
+            return [
+                "q", "/GSov gs", "/CSCut CS", "1 SCN",
+                f"{width:.3f} w", path_ops, "S", "Q",
+            ]
+        r, g, b = DIELINE_RGB
+        return [
+            "q", f"{r / 255:.4f} {g / 255:.4f} {b / 255:.4f} RG",
+            f"{width:.3f} w", path_ops, "S", "Q",
+        ]
 
     # -- printer's marks -------------------------------------------------
 
@@ -860,6 +893,17 @@ class _PdfWriter:
             resources += f"/XObject << {' '.join(image_refs)} >> "
         if shading_refs:
             resources += f"/Shading << {' '.join(shading_refs)} >> "
+        if self.uses_cutcontour:
+            tint = self._add(
+                b"<< /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] "
+                b"/C1 [0 1 0 0] /N 1 >>"
+            )
+            cs = self._add(
+                f"[/Separation /CutContour /DeviceCMYK {tint} 0 R]".encode("latin-1")
+            )
+            gs = self._add(b"<< /Type /ExtGState /OP true /op true /OPM 1 >>")
+            resources += f"/ColorSpace << /CSCut {cs} 0 R >> "
+            resources += f"/ExtGState << /GSov {gs} 0 R >> "
         resources += ">>"
 
         # Document px -> PDF points (72/inch) at the document's density.
