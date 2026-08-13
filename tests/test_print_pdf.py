@@ -365,6 +365,62 @@ def test_folder_pocket_gets_horizontal_fold_marks(tmp_path):
     assert ops.count(f"{pocket_y:.3f} ".encode()) >= 1
 
 
+# ------------------------------------------------------------- multi-page
+
+
+def test_document_list_makes_multi_page_pdf(tmp_path):
+    front = card_doc()
+    back = Document(width=336, height=192, shapes=[
+        Shape("rect", {"x": "0", "y": "0", "width": "336", "height": "192",
+                       "fill": "#111827"}),
+        Shape("text", {"x": "20", "y": "100", "font-size": "12", "fill": "#ffffff",
+                       "font-family": "DejaVu Sans"}, text="back side"),
+    ])
+    out = render_pdf([front, back], tmp_path / "two.pdf",
+                     format=get_format("business-card"), bleed=9, marks=True)
+    data = out.read_bytes()
+    assert data.count(b"/Type /Page ") == 2
+    assert b"/Count 2" in data
+    assert data.count(b"/TrimBox") == 2  # marks/boxes on every page
+    ops = pdf_streams(data)
+    assert b"ACME" in ops and b"back side" in ops
+
+
+def test_empty_document_list_is_an_error(tmp_path):
+    from designer.render import RenderError
+
+    with pytest.raises(RenderError):
+        render_pdf([], tmp_path / "none.pdf")
+
+
+def test_cli_renders_front_and_back(tmp_path):
+    front = tmp_path / "front.svg"
+    back = tmp_path / "back.svg"
+    for path, color in ((front, "#1a56db"), (back, "#111827")):
+        path.write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 336 192">'
+            f'<rect x="0" y="0" width="336" height="192" fill="{color}"/></svg>'
+        )
+    out = tmp_path / "board.pdf"
+    assert cli_main(["render", str(front), str(back), "-o", str(out),
+                     "--format", "business-card", "--marks"]) == 0
+    data = out.read_bytes()
+    assert b"/Count 2" in data
+    ops = pdf_streams(data)
+    assert b"front.svg" in ops and b"back.svg" in ops  # per-page slug
+
+
+def test_cli_rejects_multiple_inputs_for_png(tmp_path, capsys):
+    svg = tmp_path / "a.svg"
+    svg.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">'
+        '<rect x="0" y="0" width="10" height="10" fill="#1a56db"/></svg>'
+    )
+    assert cli_main(["render", str(svg), str(svg),
+                     "-o", str(tmp_path / "x.png")]) == 2
+    assert "multiple inputs" in capsys.readouterr().err
+
+
 def test_cli_marks_default_on_for_print_with_bleed(tmp_path, capsys):
     svg = tmp_path / "card.svg"
     svg.write_text(

@@ -311,7 +311,7 @@ def _pdf_escape(text: str) -> bytes:
 
 
 def render_pdf(
-    doc: Document,
+    doc: Document | list[Document],
     path: str | Path,
     dpi: float = 300.0,
     cmyk: bool = False,
@@ -322,6 +322,9 @@ def render_pdf(
     icc_profile: str | Path | None = None,
 ) -> Path:
     """Write a vector PDF.
+
+    ``doc`` may be a list of Documents: one page each, sharing format,
+    bleed and marks — front/back of a board, panels of a folded piece.
 
     Geometry stays vector at any DPI. The page's physical size comes
     from the document's px density: ``format.dpi`` when a format is
@@ -352,7 +355,7 @@ def render_pdf(
 class _PdfWriter:
     def __init__(
         self,
-        doc: Document,
+        doc: Document | list[Document],
         cmyk: bool = False,
         embed_fonts: bool = True,
         format: "object | None" = None,
@@ -360,7 +363,10 @@ class _PdfWriter:
         marks: bool = False,
         icc_profile: str | Path | None = None,
     ):
-        self.doc = doc
+        self.docs = list(doc) if isinstance(doc, (list, tuple)) else [doc]
+        if not self.docs:
+            raise RenderError("render_pdf needs at least one document")
+        self.doc = self.docs[0]  # current page while building
         self.cmyk = cmyk
         self.embed_fonts = embed_fonts
         self.format = format
@@ -379,9 +385,11 @@ class _PdfWriter:
         self.offset = self.bleed + self.slug
         self.objects: list[bytes] = []
         self.fonts: dict[str, _PdfFont] = {}
-        self.images: dict[int, tuple[str, bytes, int, int, str]] = {}
+        self.images: list[tuple[str, bytes, int, int, str]] = []
         self.shadings: list[tuple[str, GradientDef]] = []
-        self.base_dir = Path(doc.source).parent if doc.source else None
+        self.base_dir = (
+            Path(self.doc.source).parent if self.doc.source else None
+        )
 
     def _mm(self, mm: float) -> float:
         return mm * self.px_dpi / 25.4
@@ -493,9 +501,9 @@ class _PdfWriter:
                 "W n",
             ]
 
-        for index, shape in enumerate(doc.shapes):
+        for shape in doc.shapes:
             if shape.tag == "image":
-                ops.extend(self._image_ops(index, shape))
+                ops.extend(self._image_ops(shape))
                 continue
             if shape.tag == "text":
                 ops.extend(self._text_ops(shape))
@@ -626,7 +634,7 @@ class _PdfWriter:
             return f"CMYK ({self.icc_desc or 'ICC managed'})"
         return "CMYK (unmanaged)"
 
-    def _image_ops(self, index: int, shape: Shape) -> list[str]:
+    def _image_ops(self, shape: Shape) -> list[str]:
         href = shape.get("href") or shape.get("xlink:href") or ""
         img = _decode_href(href, self.base_dir)
         if img is None:
@@ -643,8 +651,8 @@ class _PdfWriter:
             fitted = ImageCms.applyTransform(fitted, self._icc)
             space = "/DeviceCMYK"
         raw = zlib.compress(fitted.tobytes())
-        name = f"Im{index}"
-        self.images[index] = (name, raw, fitted.width, fitted.height, space)
+        name = f"Im{len(self.images)}"
+        self.images.append((name, raw, fitted.width, fitted.height, space))
         # Images draw in a y-down space, so flip back inside the cm.
         return [
             "q",
@@ -816,7 +824,13 @@ class _PdfWriter:
     # -- assembly --------------------------------------------------------
 
     def build(self, dpi: float) -> bytes:
-        content = self._content()  # populates fonts/images/shadings
+        # One content stream per page; fonts/images/shadings accumulate
+        # into a single resource dictionary shared by all pages.
+        contents = []
+        for doc in self.docs:
+            self.doc = doc
+            self.base_dir = Path(doc.source).parent if doc.source else None
+            contents.append(self._content())
 
         font_refs = []
         for font in self.fonts.values():
@@ -824,7 +838,7 @@ class _PdfWriter:
             font_refs.append(f"/{font.name} {font.obj} 0 R")
 
         image_refs = []
-        for _, (name, raw, w, h, space) in self.images.items():
+        for name, raw, w, h, space in self.images:
             obj = self._add(
                 b"<< /Type /XObject /Subtype /Image /Width %d /Height %d "
                 b"/ColorSpace %s /BitsPerComponent 8 /Filter /FlateDecode "
@@ -839,13 +853,6 @@ class _PdfWriter:
             obj = self._shading_object(grad)
             shading_refs.append(f"/{name} {obj} 0 R")
 
-        stream = zlib.compress(content.encode("latin-1", errors="replace"))
-        content_obj = self._add(
-            b"<< /Length %d /Filter /FlateDecode >>\nstream\n" % len(stream)
-            + stream
-            + b"\nendstream"
-        )
-
         resources = "<< "
         if font_refs:
             resources += f"/Font << {' '.join(font_refs)} >> "
@@ -857,34 +864,50 @@ class _PdfWriter:
 
         # Document px -> PDF points (72/inch) at the document's density.
         pt_scale = 72.0 / self.px_dpi
-        page_w = (self.doc.width + 2 * self.offset) * pt_scale
-        page_h = (self.doc.height + 2 * self.offset) * pt_scale
-
-        boxes = f"/MediaBox [0 0 {page_w:.3f} {page_h:.3f}] "
-        if self.offset > 0:
-            trim = self.offset * pt_scale
-            boxes += (
-                f"/TrimBox [{trim:.3f} {trim:.3f} "
-                f"{page_w - trim:.3f} {page_h - trim:.3f}] "
-            )
-            edge = self.slug * pt_scale
-            boxes += (
-                f"/BleedBox [{edge:.3f} {edge:.3f} "
-                f"{page_w - edge:.3f} {page_h - edge:.3f}] "
-            )
 
         pages_obj = self._reserve()
-        page_obj = self._add(
-            (
-                f"<< /Type /Page /Parent {pages_obj} 0 R "
-                f"{boxes}"
-                f"/Resources {resources} /Contents {content_obj} 0 R "
-                f"/UserUnit 1 >>"
-            ).encode("latin-1")
-        )
+        kids = []
+        for doc, content in zip(self.docs, contents):
+            # Content coordinates are in px; scale the page down to pt.
+            scaled = f"{pt_scale:.6f} 0 0 {pt_scale:.6f} 0 0 cm\n" + content
+            stream = zlib.compress(scaled.encode("latin-1", errors="replace"))
+            content_obj = self._add(
+                b"<< /Length %d /Filter /FlateDecode >>\nstream\n" % len(stream)
+                + stream
+                + b"\nendstream"
+            )
+
+            page_w = (doc.width + 2 * self.offset) * pt_scale
+            page_h = (doc.height + 2 * self.offset) * pt_scale
+            boxes = f"/MediaBox [0 0 {page_w:.3f} {page_h:.3f}] "
+            if self.offset > 0:
+                trim = self.offset * pt_scale
+                boxes += (
+                    f"/TrimBox [{trim:.3f} {trim:.3f} "
+                    f"{page_w - trim:.3f} {page_h - trim:.3f}] "
+                )
+                edge = self.slug * pt_scale
+                boxes += (
+                    f"/BleedBox [{edge:.3f} {edge:.3f} "
+                    f"{page_w - edge:.3f} {page_h - edge:.3f}] "
+                )
+
+            kids.append(
+                self._add(
+                    (
+                        f"<< /Type /Page /Parent {pages_obj} 0 R "
+                        f"{boxes}"
+                        f"/Resources {resources} /Contents {content_obj} 0 R "
+                        f"/UserUnit 1 >>"
+                    ).encode("latin-1")
+                )
+            )
         self._set(
             pages_obj,
-            f"<< /Type /Pages /Kids [{page_obj} 0 R] /Count 1 >>".encode("latin-1"),
+            (
+                f"<< /Type /Pages /Kids [{' '.join(f'{k} 0 R' for k in kids)}] "
+                f"/Count {len(kids)} >>"
+            ).encode("latin-1"),
         )
         # Output intent: the press profile travels with the file so the
         # RIP knows what the CMYK numbers mean.
@@ -908,16 +931,6 @@ class _PdfWriter:
             intents = f" /OutputIntents [{intent_obj} 0 R]"
         catalog = self._add(
             f"<< /Type /Catalog /Pages {pages_obj} 0 R{intents} >>".encode("latin-1")
-        )
-
-        # Content coordinates are in px; scale the whole page down to pt.
-        scaled = f"{pt_scale:.6f} 0 0 {pt_scale:.6f} 0 0 cm\n" + content
-        stream = zlib.compress(scaled.encode("latin-1", errors="replace"))
-        self._set(
-            content_obj,
-            b"<< /Length %d /Filter /FlateDecode >>\nstream\n" % len(stream)
-            + stream
-            + b"\nendstream",
         )
 
         out = bytearray(b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n")

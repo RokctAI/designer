@@ -214,16 +214,24 @@ def cmd_formats(args: argparse.Namespace) -> int:
 
 def cmd_render(args: argparse.Namespace) -> int:
     engine = ComplianceEngine(load_system(args.system), format=args.format)
-    try:
-        doc = engine.load(args.input, _vector_options(args))
-    except ComplexityError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 2
-    if args.comply:
-        engine.comply(doc)
-
     out = Path(args.output)
     suffix = out.suffix.lower()
+    if len(args.input) > 1 and suffix != ".pdf":
+        print("error: multiple inputs need a .pdf output (one page each)",
+              file=sys.stderr)
+        return 2
+    docs = []
+    for source in args.input:
+        try:
+            docs.append(engine.load(source, _vector_options(args)))
+        except ComplexityError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+    if args.comply:
+        for doc in docs:
+            engine.comply(doc)
+    doc = docs[0]
+
     from designer.render import render_pdf, render_png
 
     if suffix == ".pdf":
@@ -237,7 +245,7 @@ def cmd_render(args: argparse.Namespace) -> int:
             marks = is_print and (args.cmyk or bleed > 0)
         icc = args.icc or engine.system.icc_profile
         render_pdf(
-            doc, out, dpi=args.dpi, cmyk=args.cmyk,
+            docs if len(docs) > 1 else doc, out, dpi=args.dpi, cmyk=args.cmyk,
             format=spec, bleed=bleed, marks=marks, icc_profile=icc,
         )
     elif suffix in (".png", ".jpg", ".jpeg"):
@@ -255,8 +263,12 @@ def cmd_render(args: argparse.Namespace) -> int:
         print(f"error: unsupported output type {suffix!r}", file=sys.stderr)
         return 2
 
-    for warning in doc.warnings:
-        print(f"note: {warning}", file=sys.stderr)
+    seen = set()
+    for doc in docs:
+        for warning in doc.warnings:
+            if warning not in seen:
+                seen.add(warning)
+                print(f"note: {warning}", file=sys.stderr)
     print(f"Wrote {out}")
     return 0
 
@@ -320,7 +332,9 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_formats)
 
     p = sub.add_parser("render", help="render a design to PNG or print-ready PDF")
-    p.add_argument("input", help="SVG or raster image")
+    p.add_argument("input", nargs="+",
+                   help="SVG or raster image(s); several inputs make a "
+                   "multi-page PDF (front/back, folded panels)")
     p.add_argument("--output", "-o", required=True, help="out.png | out.pdf | out.svg")
     p.add_argument("--width", type=int, default=None, metavar="PX",
                    help="output width in px (PNG only)")
