@@ -267,6 +267,104 @@ def test_broken_profile_falls_back_and_warns(tmp_path):
     assert any("could not be used" in w for w in doc.warnings)
 
 
+# --------------------------------------------------- custom/panel formats
+
+
+def test_builtin_print_presets():
+    board = get_format("signboard-2000x800")
+    assert board.category == "print" and board.dpi == 150
+    assert board.width == pytest.approx(2000 * 150 / 25.4, abs=0.5)
+    assert board.height == pytest.approx(800 * 150 / 25.4, abs=0.5)
+
+    zfold = get_format("z-fold-a4")
+    assert len(zfold.panels) == 3
+    assert sum(zfold.panels) == pytest.approx(zfold.width, abs=1.0)
+    # The fold-in panel is 2mm narrower than the cover panel.
+    assert zfold.panels[0] - zfold.panels[2] == pytest.approx(2 * 300 / 25.4, abs=0.5)
+
+    folder = get_format("corporate-folder-a4")
+    assert folder.panels[1] == pytest.approx(5 * 300 / 25.4, abs=0.5)  # spine
+    assert folder.panels_y[-1] == pytest.approx(80 * 300 / 25.4, abs=0.5)  # pocket
+
+
+def test_custom_formats_from_system_yaml_merge_into_catalog():
+    from designer.engine import ComplianceEngine
+
+    system = system_from_dict({
+        "name": "Shop",
+        "color": {"tokens": {"ink": "#111827"}},
+        "formats": {
+            "shelf-strip": {
+                "unit": "mm", "dpi": 300, "width": 1000, "height": 60,
+                "category": "print", "bleed": 3,
+                "description": "shelf-edge strip",
+            },
+        },
+    })
+    spec = get_format("shelf-strip", extra=system.formats)
+    assert spec.width == pytest.approx(1000 * 300 / 25.4, abs=0.5)
+    assert spec.bleed == pytest.approx(3 * 300 / 25.4, abs=0.5)
+    engine = ComplianceEngine(system, format="shelf-strip")
+    assert engine.format.name == "shelf-strip"
+    # Unknown names still fail, and customs never leak without the system.
+    with pytest.raises(ValueError, match="Known formats"):
+        get_format("shelf-strip")
+
+
+def test_custom_format_requires_dimensions():
+    with pytest.raises(ValueError, match="width and height"):
+        system_from_dict({
+            "name": "S",
+            "color": {"tokens": {"ink": "#111827"}},
+            "formats": {"broken": {"category": "print"}},
+        })
+
+
+def test_cli_formats_lists_custom_formats(tmp_path, capsys):
+    system = tmp_path / "sys.yaml"
+    system.write_text(
+        "name: T\ncolor:\n  tokens:\n    primary: '#1a56db'\n"
+        "formats:\n  gazebo-panel:\n    unit: mm\n    dpi: 150\n"
+        "    width: 2900\n    height: 2100\n    category: print\n"
+    )
+    assert cli_main(["formats", "--system", str(system)]) == 0
+    out = capsys.readouterr().out
+    assert "gazebo-panel" in out
+    assert "signboard-2000x800" in out
+
+
+def test_fold_marks_at_panel_boundaries(tmp_path):
+    spec = get_format("z-fold-a4")
+    doc = Document(width=spec.width, height=spec.height, shapes=[
+        Shape("rect", {"x": "0", "y": "0", "width": f"{spec.width}",
+                       "height": f"{spec.height}", "fill": "#f3f4f6"}),
+    ])
+    out = render_pdf(doc, tmp_path / "fold.pdf", format=spec, marks=True)
+    ops = pdf_streams(out.read_bytes())
+    assert re.search(rb"\[[\d.]+ [\d.]+\] 0 d", ops)  # dashed pattern set
+    # Two fold boundaries, ticked top and bottom, at the panel sums.
+    x1, x2 = spec.panels[0], spec.panels[0] + spec.panels[1]
+    for x in (x1, x2):
+        assert ops.count(f"{x:.3f} ".encode()) >= 2
+    # Physical size: A4 landscape trim -> 842pt-wide TrimBox at 300dpi.
+    m = re.search(rb"/TrimBox \[([-\d. ]+)\]", out.read_bytes())
+    t = [float(v) for v in m.group(1).split()]
+    assert t[2] - t[0] == pytest.approx(841.9, abs=0.5)
+
+
+def test_folder_pocket_gets_horizontal_fold_marks(tmp_path):
+    spec = get_format("corporate-folder-a4")
+    doc = Document(width=spec.width, height=spec.height, shapes=[
+        Shape("rect", {"x": "0", "y": "0", "width": f"{spec.width}",
+                       "height": f"{spec.height}", "fill": "#ffffff"}),
+    ])
+    ops = pdf_streams(
+        render_pdf(doc, tmp_path / "folder.pdf", format=spec, marks=True).read_bytes()
+    )
+    pocket_y = spec.panels_y[0]
+    assert ops.count(f"{pocket_y:.3f} ".encode()) >= 1
+
+
 def test_cli_marks_default_on_for_print_with_bleed(tmp_path, capsys):
     svg = tmp_path / "card.svg"
     svg.write_text(

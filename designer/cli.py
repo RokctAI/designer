@@ -191,17 +191,22 @@ def cmd_tokens(args: argparse.Namespace) -> int:
 
 
 def cmd_formats(args: argparse.Namespace) -> int:
+    system = load_system(args.system)
     current = None
-    for spec in all_formats():
+    for spec in all_formats(extra=system.formats):
         if spec.category != current:
             current = spec.category
             print(f"\n{current}")
         size = f"{spec.width:g}x{spec.height:g}"
         extras = []
+        if spec.dpi != 96.0:
+            extras.append(f"{spec.dpi:g}dpi")
         if spec.margin:
             extras.append(f"margin {spec.margin:.0%}")
         if spec.min_text_size:
             extras.append(f"min text {spec.min_text_size:g}px")
+        if spec.panels:
+            extras.append(f"{len(spec.panels)} panels")
         extra = f"  ({', '.join(extras)})" if extras else ""
         print(f"  {spec.name:20s} {size:12s} {spec.description}{extra}")
     return 0
@@ -224,7 +229,9 @@ def cmd_render(args: argparse.Namespace) -> int:
     if suffix == ".pdf":
         spec = engine.format
         is_print = spec is not None and spec.category == "print"
-        bleed = engine.system.bleed if is_print else 0.0
+        bleed = 0.0
+        if is_print:
+            bleed = spec.bleed if spec.bleed is not None else engine.system.bleed
         marks = args.marks
         if marks is None:
             marks = is_print and (args.cmyk or bleed > 0)
@@ -309,6 +316,7 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_tokens)
 
     p = sub.add_parser("formats", help="list deliverable formats")
+    _add_system_arg(p)
     p.set_defaults(func=cmd_formats)
 
     p = sub.add_parser("render", help="render a design to PNG or print-ready PDF")

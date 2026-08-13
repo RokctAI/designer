@@ -86,7 +86,7 @@ class BleedRule(Rule):
         self.spec = spec
 
     def run(self, doc: Document, system: DesignSystem, autofix: bool) -> list[Finding]:
-        bleed = system.bleed
+        bleed = self.spec.bleed if self.spec.bleed is not None else system.bleed
         if bleed <= 0 or self.spec.category != "print":
             return []
         findings = []

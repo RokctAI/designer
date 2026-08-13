@@ -566,6 +566,23 @@ class _PdfWriter:
             for px, py in ring[1:]:
                 ops.append(f"{px:.3f} {py:.3f} l")
             ops.append("h S")
+
+        # Fold marks: dashed ticks outside the trim at panel boundaries.
+        panels = tuple(getattr(self.format, "panels", ()) or ())
+        panels_y = tuple(getattr(self.format, "panels_y", ()) or ())
+        if panels or panels_y:
+            ops += ["q", f"[{mm(1.0):.3f} {mm(1.0):.3f}] 0 d"]
+            x = 0.0
+            for panel in panels[:-1]:
+                x += panel
+                line(x, -gap, x, -(gap + length))
+                line(x, h + gap, x, h + gap + length)
+            y = 0.0
+            for panel in panels_y[:-1]:
+                y += panel
+                line(-gap, y, -(gap + length), y)
+                line(w + gap, y, w + gap + length, y)
+            ops.append("Q")
         ops.append("Q")
 
         ops.extend(self._slug_ops(reg_fill))

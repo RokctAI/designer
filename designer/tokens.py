@@ -73,6 +73,10 @@ class DesignSystem:
     min_contrast_large_text: float = 3.0
     large_text_size: float = 24.0
 
+    # Brand-specific deliverable formats, merged over the built-in
+    # catalog by name (designer.formats.FormatSpec instances).
+    formats: list = field(default_factory=list)
+
     def token_rgbs(self) -> list[RGB]:
         return [t.rgb for t in self.colors]
 
@@ -162,6 +166,14 @@ def _parse_system(data: dict) -> DesignSystem:
     system.large_text_size = float(
         a11y_cfg.get("large_text_size", system.large_text_size)
     )
+
+    formats_cfg = data.get("formats", {}) or {}
+    if formats_cfg:
+        from designer.formats import format_from_dict
+
+        system.formats = [
+            format_from_dict(name, cfg) for name, cfg in formats_cfg.items()
+        ]
 
     if not system.colors:
         raise ValueError("Design system must define at least one color token")

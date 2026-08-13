@@ -30,7 +30,7 @@ class ComplianceEngine:
     ):
         self.system = system
         if isinstance(format, str):
-            format = get_format(format)
+            format = get_format(format, extra=system.formats)
         self.format = format
         base = rules if rules is not None else list(DEFAULT_RULES)
         if format is not None:
