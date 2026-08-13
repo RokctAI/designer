@@ -1,0 +1,105 @@
+{
+ "name": "Design Print Job",
+ "engine": "InnoDB",
+ "creation": "2026-08-13 09:00:00.000000",
+ "doctype": "DocType",
+ "fields": [
+  {
+   "fieldname": "candidate",
+   "fieldtype": "Link",
+   "label": "Deliverable Candidate",
+   "options": "Design Candidate",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "request",
+   "fieldtype": "Link",
+   "label": "Design Request",
+   "options": "Design Request",
+   "read_only": 1
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "vendor_name",
+   "fieldtype": "Data",
+   "label": "Vendor Name",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "final_size",
+   "fieldtype": "Data",
+   "label": "Final Size",
+   "description": "Trim size as handed to the vendor, e.g. 850x2000mm"
+  },
+  {
+   "fieldname": "sides",
+   "fieldtype": "Data",
+   "label": "Sides",
+   "description": "e.g. single-sided, 4/4"
+  },
+  {
+   "fieldname": "material_finish",
+   "fieldtype": "Small Text",
+   "label": "Material / Finish",
+   "description": "Free text, e.g. 440gsm PVC, matt laminate"
+  },
+  {
+   "fieldname": "press_pdf",
+   "fieldtype": "Attach",
+   "label": "Press-Ready PDF",
+   "description": "CMYK vector PDF rendered via render_deliverable"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nSent\nProof Approved\nIn Production\nDelivered",
+   "default": "Draft",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "sales_order",
+   "fieldtype": "Link",
+   "label": "Sales Order",
+   "options": "Sales Order",
+   "description": "Optional billing hook; quotes/payments live in the host app (FIELD_ADS_SPEC section 8)"
+  },
+  {
+   "fieldname": "sales_invoice",
+   "fieldtype": "Link",
+   "label": "Sales Invoice",
+   "options": "Sales Invoice",
+   "description": "Optional billing hook; quotes/payments live in the host app"
+  }
+ ],
+ "modified": "2026-08-13 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "{module_name}",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "Design Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "autoname": "DPJ-.#####",
+ "naming_rule": "Expression (old style)",
+ "track_changes": 1
+}

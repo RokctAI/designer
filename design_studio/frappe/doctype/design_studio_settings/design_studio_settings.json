@@ -1,0 +1,85 @@
+{
+ "name": "Design Studio Settings",
+ "engine": "InnoDB",
+ "creation": "2026-08-13 09:00:00.000000",
+ "doctype": "DocType",
+ "fields": [
+  {
+   "fieldname": "default_provider",
+   "fieldtype": "Link",
+   "label": "Default Provider",
+   "options": "Generation Provider"
+  },
+  {
+   "fieldname": "default_min_score",
+   "fieldtype": "Float",
+   "label": "Default Min Score",
+   "default": "95"
+  },
+  {
+   "fieldname": "default_max_attempts",
+   "fieldtype": "Int",
+   "label": "Default Max Attempts",
+   "default": "3"
+  },
+  {
+   "fieldname": "default_n_candidates",
+   "fieldtype": "Int",
+   "label": "Default Candidates",
+   "default": "3"
+  },
+  {
+   "fieldname": "default_n_colors",
+   "fieldtype": "Int",
+   "label": "Default Vectorize Colors",
+   "default": "6"
+  },
+  {
+   "fieldname": "max_dim",
+   "fieldtype": "Int",
+   "label": "Max Input Dimension",
+   "default": "1024"
+  },
+  {
+   "fieldname": "keep_raw_days",
+   "fieldtype": "Int",
+   "label": "Keep Raw Files (Days)",
+   "default": "30",
+   "description": "Raw PNGs older than this are deleted by the daily job; compliant SVGs are kept forever"
+  },
+  {
+   "fieldname": "campaign_regen_threshold",
+   "fieldtype": "Float",
+   "label": "Campaign Regen Threshold",
+   "default": "0.35",
+   "description": "aspect_waste above this regenerates instead of deriving"
+  },
+  {
+   "fieldname": "approval_link_expiry_days",
+   "fieldtype": "Int",
+   "label": "Approval Link Expiry (Days)",
+   "default": "14"
+  }
+ ],
+ "modified": "2026-08-13 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "{module_name}",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1
+  },
+  {
+   "role": "Design Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "issingle": 1
+}

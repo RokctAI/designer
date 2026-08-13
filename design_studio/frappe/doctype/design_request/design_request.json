@@ -1,0 +1,151 @@
+{
+ "name": "Design Request",
+ "engine": "InnoDB",
+ "creation": "2026-08-13 09:00:00.000000",
+ "doctype": "DocType",
+ "fields": [
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "description": "Defaults to the first 60 chars of the prompt"
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "source_mode",
+   "fieldtype": "Select",
+   "label": "Source Mode",
+   "options": "Uploaded Artwork\nGenerated",
+   "default": "Uploaded Artwork",
+   "reqd": 1,
+   "description": "Uploaded Artwork runs the compliance engine on files attached to this request; Generated calls a Generation Provider (AI generation is a later milestone)"
+  },
+  {
+   "fieldname": "prompt",
+   "fieldtype": "Small Text",
+   "label": "Prompt",
+   "description": "Creative brief; required when source_mode is Generated"
+  },
+  {
+   "fieldname": "composed_prompt",
+   "fieldtype": "Small Text",
+   "label": "Composed Prompt",
+   "read_only": 1,
+   "description": "Full prompt composed from the design system; kept for reproducibility (FRONTEND_SPEC 1)"
+  },
+  {
+   "fieldname": "design_system",
+   "fieldtype": "Link",
+   "label": "Design System",
+   "options": "Design System",
+   "reqd": 1
+  },
+  {
+   "fieldname": "format",
+   "fieldtype": "Data",
+   "label": "Format",
+   "reqd": 1,
+   "default": "logo",
+   "description": "Engine format name, validated against designer.formats.get_format"
+  },
+  {
+   "fieldname": "n_candidates",
+   "fieldtype": "Int",
+   "label": "Candidates",
+   "default": "3",
+   "description": "Capped at 4"
+  },
+  {
+   "fieldname": "min_score",
+   "fieldtype": "Float",
+   "label": "Min Score",
+   "default": "95"
+  },
+  {
+   "fieldname": "max_attempts",
+   "fieldtype": "Int",
+   "label": "Max Attempts",
+   "default": "3",
+   "description": "Regenerations per candidate slot (Generated mode only)"
+  },
+  {
+   "fieldname": "provider",
+   "fieldtype": "Link",
+   "label": "Provider",
+   "options": "Generation Provider",
+   "description": "Defaults from Design Studio Settings; unused for Uploaded Artwork"
+  },
+  {
+   "fieldname": "n_colors",
+   "fieldtype": "Int",
+   "label": "Vectorize Colors",
+   "default": "6",
+   "description": "Passed to VectorizeOptions"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nQueued\nProcessing\nReady\nDelivered\nFailed",
+   "default": "Draft",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "error_message",
+   "fieldtype": "Small Text",
+   "label": "Error Message",
+   "read_only": 1,
+   "description": "Set only when status is Failed"
+  },
+  {
+   "fieldname": "requested_by",
+   "fieldtype": "Link",
+   "label": "Requested By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sales_order",
+   "fieldtype": "Link",
+   "label": "Sales Order",
+   "options": "Sales Order",
+   "description": "Optional billing hook; quotes/payments live in the host app (FIELD_ADS_SPEC section 8)"
+  },
+  {
+   "fieldname": "sales_invoice",
+   "fieldtype": "Link",
+   "label": "Sales Invoice",
+   "options": "Sales Invoice",
+   "description": "Optional billing hook; quotes/payments live in the host app"
+  }
+ ],
+ "modified": "2026-08-13 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "{module_name}",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "Design Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "autoname": "DR-.#####",
+ "naming_rule": "Expression (old style)",
+ "track_changes": 1
+}

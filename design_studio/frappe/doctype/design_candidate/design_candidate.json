@@ -1,0 +1,119 @@
+{
+ "name": "Design Candidate",
+ "engine": "InnoDB",
+ "creation": "2026-08-13 09:00:00.000000",
+ "doctype": "DocType",
+ "fields": [
+  {
+   "fieldname": "request",
+   "fieldtype": "Link",
+   "label": "Design Request",
+   "options": "Design Request",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "slot",
+   "fieldtype": "Int",
+   "label": "Slot",
+   "description": "Candidate index 1..n_candidates"
+  },
+  {
+   "fieldname": "attempt",
+   "fieldtype": "Int",
+   "label": "Attempt",
+   "description": "1..max_attempts; final attempt kept"
+  },
+  {
+   "fieldname": "raw_image",
+   "fieldtype": "Attach",
+   "label": "Raw Image",
+   "description": "Uploaded artwork or provider output (private file)"
+  },
+  {
+   "fieldname": "compliant_svg",
+   "fieldtype": "Attach",
+   "label": "Compliant SVG",
+   "description": "Engine output; always points at the latest passing revision"
+  },
+  {
+   "fieldname": "score_before",
+   "fieldtype": "Float",
+   "label": "Score Before",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "score_after",
+   "fieldtype": "Float",
+   "label": "Score After",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "report_json",
+   "fieldtype": "Long Text",
+   "label": "Report JSON",
+   "read_only": 1,
+   "description": "Engine report.to_json() verbatim \u2014 never re-shaped"
+  },
+  {
+   "fieldname": "passed",
+   "fieldtype": "Check",
+   "label": "Passed",
+   "read_only": 1,
+   "in_list_view": 1,
+   "description": "score_after >= request.min_score"
+  },
+  {
+   "fieldname": "selected",
+   "fieldtype": "Check",
+   "label": "Selected",
+   "read_only": 1,
+   "description": "Set via API only; max one per request"
+  },
+  {
+   "fieldname": "revision_of",
+   "fieldtype": "Link",
+   "label": "Revision Of",
+   "options": "Design Candidate",
+   "description": "Set when this candidate supersedes another (e.g. campaign re-comply of a master candidate)"
+  },
+  {
+   "fieldname": "generation_ms",
+   "fieldtype": "Int",
+   "label": "Generation ms",
+   "read_only": 1
+  },
+  {
+   "fieldname": "comply_ms",
+   "fieldtype": "Int",
+   "label": "Comply ms",
+   "read_only": 1
+  }
+ ],
+ "modified": "2026-08-13 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "{module_name}",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "Design Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "autoname": "DC-.#####",
+ "naming_rule": "Expression (old style)",
+ "track_changes": 1
+}

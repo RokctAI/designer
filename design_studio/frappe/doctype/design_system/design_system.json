@@ -1,0 +1,158 @@
+{
+ "name": "Design System",
+ "engine": "InnoDB",
+ "creation": "2026-08-13 09:00:00.000000",
+ "doctype": "DocType",
+ "fields": [
+  {
+   "fieldname": "system_name",
+   "fieldtype": "Data",
+   "label": "System Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "brand_name",
+   "fieldtype": "Data",
+   "label": "Brand Name",
+   "description": "Used in zero-prompt logo subjects (FRONTEND_SPEC 1.1)"
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer",
+   "description": "Client this brand system belongs to (Customer is supplied by ERPNext in the composed site)"
+  },
+  {
+   "fieldname": "is_default",
+   "fieldtype": "Check",
+   "label": "Is Default",
+   "default": "0",
+   "description": "Fallback system for requests that don't pick one; max one per customer"
+  },
+  {
+   "fieldname": "seed_color_1",
+   "fieldtype": "Data",
+   "label": "Seed Color 1",
+   "description": "Hex seed the full system was derived from (derive_design_system); informational once derived"
+  },
+  {
+   "fieldname": "seed_color_2",
+   "fieldtype": "Data",
+   "label": "Seed Color 2"
+  },
+  {
+   "fieldname": "seed_color_3",
+   "fieldtype": "Data",
+   "label": "Seed Color 3"
+  },
+  {
+   "fieldname": "color_tokens",
+   "fieldtype": "Table",
+   "label": "Color Tokens",
+   "options": "Design Color Token",
+   "reqd": 1
+  },
+  {
+   "fieldname": "max_colors",
+   "fieldtype": "Int",
+   "label": "Max Colors",
+   "default": "6"
+  },
+  {
+   "fieldname": "snap_warning_distance",
+   "fieldtype": "Float",
+   "label": "Snap Warning Distance",
+   "default": "0.18"
+  },
+  {
+   "fieldname": "fonts",
+   "fieldtype": "Table",
+   "label": "Fonts",
+   "options": "Design Font",
+   "description": "Ordered; row 1 is the primary font"
+  },
+  {
+   "fieldname": "type_scale",
+   "fieldtype": "Data",
+   "label": "Type Scale",
+   "default": "12,14,16,20,24,32,48,64",
+   "description": "CSV of px sizes"
+  },
+  {
+   "fieldname": "grid",
+   "fieldtype": "Float",
+   "label": "Grid",
+   "default": "8"
+  },
+  {
+   "fieldname": "min_element_size",
+   "fieldtype": "Float",
+   "label": "Min Element Size",
+   "default": "4"
+  },
+  {
+   "fieldname": "stroke_widths",
+   "fieldtype": "Data",
+   "label": "Stroke Widths",
+   "default": "1,2,4,8",
+   "description": "CSV of px widths"
+  },
+  {
+   "fieldname": "min_contrast_text",
+   "fieldtype": "Float",
+   "label": "Min Contrast (Text)",
+   "default": "4.5"
+  },
+  {
+   "fieldname": "min_contrast_large_text",
+   "fieldtype": "Float",
+   "label": "Min Contrast (Large Text)",
+   "default": "3.0"
+  },
+  {
+   "fieldname": "large_text_size",
+   "fieldtype": "Float",
+   "label": "Large Text Size",
+   "default": "24"
+  },
+  {
+   "fieldname": "gradient_allowed",
+   "fieldtype": "Check",
+   "label": "Gradient Allowed",
+   "default": "1",
+   "description": "Off flattens all gradients to tokens"
+  },
+  {
+   "fieldname": "gradient_max_stops",
+   "fieldtype": "Int",
+   "label": "Gradient Max Stops",
+   "default": "4"
+  }
+ ],
+ "modified": "2026-08-13 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "{module_name}",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "Design Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "autoname": "field:system_name",
+ "naming_rule": "By fieldname",
+ "track_changes": 1
+}
