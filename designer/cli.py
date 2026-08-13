@@ -8,6 +8,7 @@
   designer render in.svg -o out.png           rasterize (PNG)
   designer render in.svg -o out.pdf --cmyk    press PDF (marks + bleed)
   designer render front.svg back.svg -o b.pdf two-page (double-sided) PDF
+  designer brandbook -s client.yaml -o ci.pdf  brand manual (CI manual) PDF
 """
 
 from __future__ import annotations
@@ -173,6 +174,28 @@ def cmd_palette(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_brandbook(args: argparse.Namespace) -> int:
+    from designer.brandbook import BrandbookError, build_brandbook
+    from designer.render import render_pdf
+
+    system = load_system(args.system)
+    try:
+        pages = build_brandbook(system, logo=args.logo)
+    except BrandbookError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    out = Path(args.output)
+    render_pdf(pages, out, dpi=args.dpi)
+    seen = set()
+    for page in pages:
+        for warning in page.warnings:
+            if warning not in seen:
+                seen.add(warning)
+                print(f"note: {warning}", file=sys.stderr)
+    print(f"Wrote {out} ({len(pages)} pages, A4)")
+    return 0
+
+
 def cmd_tokens(args: argparse.Namespace) -> int:
     system = load_system(args.system)
     print(f"Design system: {system.name}")
@@ -323,6 +346,16 @@ def main(argv: list[str] | None = None) -> int:
                    help="write the derived system YAML here (usable via --system)")
     p.add_argument("--json", action="store_true", help="print the system dict as JSON")
     p.set_defaults(func=cmd_palette)
+
+    p = sub.add_parser("brandbook",
+                       help="render the design system as a brand manual PDF")
+    p.add_argument("--logo", default=None, metavar="SVG|PNG",
+                   help="brand logo to feature on its own page")
+    p.add_argument("--output", "-o", required=True, help="brandbook.pdf")
+    p.add_argument("--dpi", type=float, default=300.0,
+                   help="PDF output density (default 300)")
+    _add_system_arg(p)
+    p.set_defaults(func=cmd_brandbook)
 
     p = sub.add_parser("tokens", help="print the active design system")
     _add_system_arg(p)
