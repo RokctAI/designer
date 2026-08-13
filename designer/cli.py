@@ -228,9 +228,10 @@ def cmd_render(args: argparse.Namespace) -> int:
         marks = args.marks
         if marks is None:
             marks = is_print and (args.cmyk or bleed > 0)
+        icc = args.icc or engine.system.icc_profile
         render_pdf(
             doc, out, dpi=args.dpi, cmyk=args.cmyk,
-            format=spec, bleed=bleed, marks=marks,
+            format=spec, bleed=bleed, marks=marks, icc_profile=icc,
         )
     elif suffix in (".png", ".jpg", ".jpeg"):
         image = render_png(
@@ -318,7 +319,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--dpi", type=float, default=300.0,
                    help="output density; PDF page size and PNG scale (default 300)")
     p.add_argument("--cmyk", action="store_true",
-                   help="PDF only: convert colors to CMYK (naive, non-ICC)")
+                   help="PDF only: convert colors to CMYK (ICC-managed when a "
+                   "profile is set, else naive)")
+    p.add_argument("--icc", default=None, metavar="PROFILE",
+                   help="PDF only: press CMYK ICC profile for --cmyk "
+                   "(default: the design system's print.icc_profile)")
     p.add_argument("--marks", action=argparse.BooleanOptionalAction, default=None,
                    help="PDF only: draw crop/registration marks and a job slug "
                    "(default: on for print formats with --cmyk or a bleed)")

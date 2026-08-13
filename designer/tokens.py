@@ -52,6 +52,10 @@ class DesignSystem:
     bleed: float = 0.0            # px of bleed beyond the trim edge
     min_print_stroke: float = 0.0  # thinnest line the press can hold
     max_ink_coverage: float = 0.0  # total CMYK ink %, 0 = unchecked
+    # Path to a press CMYK ICC profile; when set, PDF CMYK output is
+    # converted through it and the profile is embedded as the PDF's
+    # output intent. Unset = naive conversion, reported as unmanaged.
+    icc_profile: str | None = None
 
     # Layout quality
     alignment_tolerance: float = 2.0  # px; edges closer than this should align
@@ -123,6 +127,8 @@ def _parse_system(data: dict) -> DesignSystem:
     system.max_ink_coverage = float(
         print_cfg.get("max_ink_coverage", system.max_ink_coverage)
     )
+    if print_cfg.get("icc_profile"):
+        system.icc_profile = str(print_cfg["icc_profile"])
 
     type_cfg = data.get("typography", {}) or {}
     if "fonts" in type_cfg:

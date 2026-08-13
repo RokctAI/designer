@@ -310,13 +310,6 @@ def _pdf_escape(text: str) -> bytes:
     return bytes(out)
 
 
-def _rgb_to_cmyk_op(rgb: RGB) -> str:
-    from designer.rules.print_rules import rgb_to_cmyk
-
-    c, m, y, k = rgb_to_cmyk(rgb)
-    return f"{c:.4f} {m:.4f} {y:.4f} {k:.4f}"
-
-
 def render_pdf(
     doc: Document,
     path: str | Path,
@@ -326,14 +319,20 @@ def render_pdf(
     format: "object | None" = None,
     bleed: float = 0.0,
     marks: bool = False,
+    icc_profile: str | Path | None = None,
 ) -> Path:
     """Write a vector PDF.
 
     Geometry stays vector at any DPI. The page's physical size comes
     from the document's px density: ``format.dpi`` when a format is
-    given, else CSS px at 96/inch. ``cmyk`` uses a naive, non-ICC
-    conversion — adequate for a first proof, not a replacement for a
-    color-managed workflow.
+    given, else CSS px at 96/inch.
+
+    ``cmyk`` converts colors to CMYK. With ``icc_profile`` (a press
+    CMYK ICC profile) the conversion is color-managed through the
+    profile, which is also embedded as the PDF's output intent — a
+    press PDF with output intent, not a validated PDF/X file. Without
+    a profile the conversion is naive and reported as unmanaged:
+    adequate for a first proof, not for plates.
 
     With ``bleed`` (px past trim) the page grows to trim + bleed and a
     /TrimBox records the finished size. ``marks`` adds a slug area and
@@ -342,7 +341,7 @@ def render_pdf(
     """
     writer = _PdfWriter(
         doc, cmyk=cmyk, embed_fonts=embed_fonts,
-        format=format, bleed=bleed, marks=marks,
+        format=format, bleed=bleed, marks=marks, icc_profile=icc_profile,
     )
     data = writer.build(dpi)
     out = Path(path)
@@ -359,6 +358,7 @@ class _PdfWriter:
         format: "object | None" = None,
         bleed: float = 0.0,
         marks: bool = False,
+        icc_profile: str | Path | None = None,
     ):
         self.doc = doc
         self.cmyk = cmyk
@@ -366,6 +366,12 @@ class _PdfWriter:
         self.format = format
         self.bleed = max(0.0, float(bleed))
         self.marks = marks
+        self._icc = None            # ImageCms transform, when managed
+        self._icc_cache: dict[RGB, tuple[float, float, float, float]] = {}
+        self.icc_bytes: bytes | None = None
+        self.icc_desc = ""
+        if cmyk:
+            self._init_icc(icc_profile)
         # px density of the document; sets physical size and mark sizes.
         self.px_dpi = float(getattr(format, "dpi", 0) or CSS_DPI)
         # Slug: room outside the bleed for marks and the job line.
@@ -373,12 +379,66 @@ class _PdfWriter:
         self.offset = self.bleed + self.slug
         self.objects: list[bytes] = []
         self.fonts: dict[str, _PdfFont] = {}
-        self.images: dict[int, tuple[str, bytes, int, int]] = {}
+        self.images: dict[int, tuple[str, bytes, int, int, str]] = {}
         self.shadings: list[tuple[str, GradientDef]] = []
         self.base_dir = Path(doc.source).parent if doc.source else None
 
     def _mm(self, mm: float) -> float:
         return mm * self.px_dpi / 25.4
+
+    # -- color management ------------------------------------------------
+
+    def _init_icc(self, icc_profile: str | Path | None) -> None:
+        """Build one RGB->CMYK transform through the press profile; on
+        any failure fall back to naive conversion and say so."""
+
+        def warn(message: str) -> None:
+            if message not in self.doc.warnings:
+                self.doc.warnings.append(message)
+
+        if not icc_profile:
+            warn(
+                "CMYK color is unmanaged (naive RGB->CMYK conversion) — "
+                "set print.icc_profile to a press CMYK ICC profile for "
+                "color-managed output"
+            )
+            return
+        try:
+            from PIL import ImageCms
+
+            profile = ImageCms.getOpenProfile(str(icc_profile))
+            self._icc = ImageCms.buildTransformFromOpenProfiles(
+                ImageCms.createProfile("sRGB"), profile, "RGB", "CMYK",
+                renderingIntent=ImageCms.Intent.RELATIVE_COLORIMETRIC,
+            )
+            self.icc_bytes = Path(icc_profile).read_bytes()
+            self.icc_desc = (ImageCms.getProfileDescription(profile) or "").strip()
+        except Exception as exc:
+            self._icc = None
+            self.icc_bytes = None
+            warn(
+                f"ICC profile {icc_profile!s} could not be used ({exc}); "
+                "CMYK color is unmanaged (naive RGB->CMYK conversion)"
+            )
+
+    def _to_cmyk(self, rgb: RGB) -> tuple[float, float, float, float]:
+        if self._icc is None:
+            from designer.rules.print_rules import rgb_to_cmyk
+
+            return rgb_to_cmyk(rgb)
+        cached = self._icc_cache.get(rgb)
+        if cached is None:
+            from PIL import ImageCms
+
+            pixel = Image.new("RGB", (1, 1), rgb)
+            c, m, y, k = ImageCms.applyTransform(pixel, self._icc).getpixel((0, 0))
+            cached = (c / 255, m / 255, y / 255, k / 255)
+            self._icc_cache[rgb] = cached
+        return cached
+
+    def _cmyk_op(self, rgb: RGB) -> str:
+        c, m, y, k = self._to_cmyk(rgb)
+        return f"{c:.4f} {m:.4f} {y:.4f} {k:.4f}"
 
     # -- object plumbing -------------------------------------------------
 
@@ -397,12 +457,12 @@ class _PdfWriter:
 
     def _fill_op(self, rgb: RGB) -> str:
         if self.cmyk:
-            return f"{_rgb_to_cmyk_op(rgb)} k"
+            return f"{self._cmyk_op(rgb)} k"
         return f"{rgb[0] / 255:.4f} {rgb[1] / 255:.4f} {rgb[2] / 255:.4f} rg"
 
     def _stroke_op(self, rgb: RGB) -> str:
         if self.cmyk:
-            return f"{_rgb_to_cmyk_op(rgb)} K"
+            return f"{self._cmyk_op(rgb)} K"
         return f"{rgb[0] / 255:.4f} {rgb[1] / 255:.4f} {rgb[2] / 255:.4f} RG"
 
     def _path_ops(self, shape: Shape) -> str:
@@ -543,7 +603,11 @@ class _PdfWriter:
         ]
 
     def _colorspace_label(self) -> str:
-        return "CMYK (unmanaged)" if self.cmyk else "RGB"
+        if not self.cmyk:
+            return "RGB"
+        if self._icc is not None:
+            return f"CMYK ({self.icc_desc or 'ICC managed'})"
+        return "CMYK (unmanaged)"
 
     def _image_ops(self, index: int, shape: Shape) -> list[str]:
         href = shape.get("href") or shape.get("xlink:href") or ""
@@ -555,9 +619,15 @@ class _PdfWriter:
         if w is None or h is None:
             return []
         fitted = _fit_slice(img.convert("RGB"), max(1, round(w)), max(1, round(h)))
+        space = "/DeviceRGB"
+        if self.cmyk and self._icc is not None:
+            from PIL import ImageCms
+
+            fitted = ImageCms.applyTransform(fitted, self._icc)
+            space = "/DeviceCMYK"
         raw = zlib.compress(fitted.tobytes())
         name = f"Im{index}"
-        self.images[index] = (name, raw, fitted.width, fitted.height)
+        self.images[index] = (name, raw, fitted.width, fitted.height, space)
         # Images draw in a y-down space, so flip back inside the cm.
         return [
             "q",
@@ -665,9 +735,7 @@ class _PdfWriter:
 
         def color_str(rgb: RGB) -> str:
             if self.cmyk:
-                from designer.rules.print_rules import rgb_to_cmyk
-
-                return " ".join(f"{v:.4f}" for v in rgb_to_cmyk(rgb))
+                return " ".join(f"{v:.4f}" for v in self._to_cmyk(rgb))
             return " ".join(f"{v / 255:.4f}" for v in rgb)
 
         # Stitch pairwise linear ramps so multi-stop gradients are exact.
@@ -739,11 +807,11 @@ class _PdfWriter:
             font_refs.append(f"/{font.name} {font.obj} 0 R")
 
         image_refs = []
-        for _, (name, raw, w, h) in self.images.items():
+        for _, (name, raw, w, h, space) in self.images.items():
             obj = self._add(
                 b"<< /Type /XObject /Subtype /Image /Width %d /Height %d "
-                b"/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode "
-                b"/Length %d >>\nstream\n" % (w, h, len(raw))
+                b"/ColorSpace %s /BitsPerComponent 8 /Filter /FlateDecode "
+                b"/Length %d >>\nstream\n" % (w, h, space.encode("latin-1"), len(raw))
                 + raw
                 + b"\nendstream"
             )
@@ -801,8 +869,28 @@ class _PdfWriter:
             pages_obj,
             f"<< /Type /Pages /Kids [{page_obj} 0 R] /Count 1 >>".encode("latin-1"),
         )
+        # Output intent: the press profile travels with the file so the
+        # RIP knows what the CMYK numbers mean.
+        intents = ""
+        if self.cmyk and self.icc_bytes:
+            compressed = zlib.compress(self.icc_bytes)
+            icc_obj = self._add(
+                b"<< /N 4 /Filter /FlateDecode /Length %d >>\nstream\n"
+                % len(compressed)
+                + compressed
+                + b"\nendstream"
+            )
+            label = _pdf_escape(self.icc_desc or "CMYK output profile").decode("latin-1")
+            intent_obj = self._add(
+                (
+                    f"<< /Type /OutputIntent /S /GTS_PDFX "
+                    f"/OutputConditionIdentifier ({label}) /Info ({label}) "
+                    f"/DestOutputProfile {icc_obj} 0 R >>"
+                ).encode("latin-1")
+            )
+            intents = f" /OutputIntents [{intent_obj} 0 R]"
         catalog = self._add(
-            f"<< /Type /Catalog /Pages {pages_obj} 0 R >>".encode("latin-1")
+            f"<< /Type /Catalog /Pages {pages_obj} 0 R{intents} >>".encode("latin-1")
         )
 
         # Content coordinates are in px; scale the whole page down to pt.
