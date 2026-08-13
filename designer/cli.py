@@ -148,6 +148,30 @@ def cmd_comply(args: argparse.Namespace) -> int:
     return 0 if report.score >= args.min_score else 1
 
 
+def cmd_palette(args: argparse.Namespace) -> int:
+    import json
+
+    import yaml
+
+    from designer.palette import derive_system, palette_summary
+
+    try:
+        data = derive_system(args.seeds, name=args.name)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps(data, indent=2))
+    else:
+        print(palette_summary(data))
+    if args.output:
+        out = Path(args.output)
+        out.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+        if not args.json:
+            print(f"\nWrote {out} (use it anywhere via --system {out})")
+    return 0
+
+
 def cmd_tokens(args: argparse.Namespace) -> int:
     system = load_system(args.system)
     print(f"Design system: {system.name}")
@@ -260,6 +284,15 @@ def main(argv: list[str] | None = None) -> int:
     _add_system_arg(p)
     _add_vector_args(p)
     p.set_defaults(func=cmd_comply)
+
+    p = sub.add_parser("palette", help="derive a full design system from 2-3 seed brand colors")
+    p.add_argument("seeds", nargs="+", metavar="HEX",
+                   help="2-3 seed colors: primary, accent, optional secondary")
+    p.add_argument("--name", default="Derived palette", help="design system name")
+    p.add_argument("--output", "-o", default=None, metavar="YAML",
+                   help="write the derived system YAML here (usable via --system)")
+    p.add_argument("--json", action="store_true", help="print the system dict as JSON")
+    p.set_defaults(func=cmd_palette)
 
     p = sub.add_parser("tokens", help="print the active design system")
     _add_system_arg(p)

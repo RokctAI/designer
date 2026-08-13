@@ -105,6 +105,26 @@ designer render art.svg -o ad.pdf --dpi 300 --cmyk --comply
 designer render art.svg -o card.png --width 1200
 ```
 
+## Start from two colours
+
+No design system yet? Derive one from your brand colours:
+
+```bash
+designer palette "#0F4C81" "#F5A623" --name client-x -o system.yaml
+# 2-3 seeds: primary, accent, optional secondary
+```
+
+Working in OKLCH, the engine derives everything else a system needs:
+an ink (near-black tinted toward the primary hue), paper and surface
+tones, text colours adjusted until they actually pass the WCAG contrast
+minimums (real ratios, printed in the swatch summary), a 4-step neutral
+scale of the primary, plus sensible typography, layout, stroke and
+print defaults (3 mm bleed at 300 dpi). The YAML it writes is a
+complete, ready-to-edit design system — pass it anywhere via
+`--system system.yaml`. From Python, `derive_system(seeds,
+overrides={...})` deep-merges the overrides last, so every derived
+value can be replaced.
+
 ## Defining your design system
 
 ```yaml
