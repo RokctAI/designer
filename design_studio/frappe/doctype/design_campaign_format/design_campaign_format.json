@@ -1,0 +1,48 @@
+{
+ "name": "Design Campaign Format",
+ "engine": "InnoDB",
+ "creation": "2026-08-13 09:00:00.000000",
+ "doctype": "DocType",
+ "fields": [
+  {
+   "fieldname": "format",
+   "fieldtype": "Data",
+   "label": "Format",
+   "reqd": 1,
+   "in_list_view": 1,
+   "description": "Engine format name from designer.formats (e.g. instagram-post)"
+  },
+  {
+   "fieldname": "action",
+   "fieldtype": "Select",
+   "label": "Action",
+   "options": "\nderive\nregenerate",
+   "read_only": 1,
+   "in_list_view": 1,
+   "description": "Set by the fan-out pipeline: derive re-complies the master artwork onto this canvas; regenerate creates a new request"
+  },
+  {
+   "fieldname": "derived_request",
+   "fieldtype": "Link",
+   "label": "Derived Request",
+   "options": "Design Request",
+   "read_only": 1
+  },
+  {
+   "fieldname": "candidate",
+   "fieldtype": "Link",
+   "label": "Candidate",
+   "options": "Design Candidate",
+   "read_only": 1,
+   "in_list_view": 1
+  }
+ ],
+ "modified": "2026-08-13 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "{module_name}",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "istable": 1
+}

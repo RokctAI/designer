@@ -1,0 +1,46 @@
+{
+ "name": "Design Color Token",
+ "engine": "InnoDB",
+ "creation": "2026-08-13 09:00:00.000000",
+ "doctype": "DocType",
+ "fields": [
+  {
+   "fieldname": "token_name",
+   "fieldtype": "Data",
+   "label": "Token Name",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "hex",
+   "fieldtype": "Data",
+   "label": "Hex",
+   "reqd": 1,
+   "in_list_view": 1,
+   "description": "6-digit hex color, e.g. #1a56db"
+  },
+  {
+   "fieldname": "role",
+   "fieldtype": "Select",
+   "label": "Role",
+   "options": "primary\naccent\nink\nmuted\nsurface\nother",
+   "default": "other",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "derived",
+   "fieldtype": "Check",
+   "label": "Derived",
+   "default": "0",
+   "description": "Generated from the seed colors by derive_design_system; still an ordinary editable row"
+  }
+ ],
+ "modified": "2026-08-13 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "{module_name}",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "istable": 1
+}

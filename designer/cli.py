@@ -6,7 +6,8 @@
   designer tokens                             show the active system
   designer formats                            list deliverable formats
   designer render in.svg -o out.png           rasterize (PNG)
-  designer render in.svg -o out.pdf --dpi 300 vector PDF for print
+  designer render in.svg -o out.pdf --cmyk    press PDF (marks + bleed)
+  designer render front.svg back.svg -o b.pdf two-page (double-sided) PDF
 """
 
 from __future__ import annotations
@@ -148,6 +149,30 @@ def cmd_comply(args: argparse.Namespace) -> int:
     return 0 if report.score >= args.min_score else 1
 
 
+def cmd_palette(args: argparse.Namespace) -> int:
+    import json
+
+    import yaml
+
+    from designer.palette import derive_system, palette_summary
+
+    try:
+        data = derive_system(args.seeds, name=args.name)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps(data, indent=2))
+    else:
+        print(palette_summary(data))
+    if args.output:
+        out = Path(args.output)
+        out.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+        if not args.json:
+            print(f"\nWrote {out} (use it anywhere via --system {out})")
+    return 0
+
+
 def cmd_tokens(args: argparse.Namespace) -> int:
     system = load_system(args.system)
     print(f"Design system: {system.name}")
@@ -167,17 +192,22 @@ def cmd_tokens(args: argparse.Namespace) -> int:
 
 
 def cmd_formats(args: argparse.Namespace) -> int:
+    system = load_system(args.system)
     current = None
-    for spec in all_formats():
+    for spec in all_formats(extra=system.formats):
         if spec.category != current:
             current = spec.category
             print(f"\n{current}")
         size = f"{spec.width:g}x{spec.height:g}"
         extras = []
+        if spec.dpi != 96.0:
+            extras.append(f"{spec.dpi:g}dpi")
         if spec.margin:
             extras.append(f"margin {spec.margin:.0%}")
         if spec.min_text_size:
             extras.append(f"min text {spec.min_text_size:g}px")
+        if spec.panels:
+            extras.append(f"{len(spec.panels)} panels")
         extra = f"  ({', '.join(extras)})" if extras else ""
         print(f"  {spec.name:20s} {size:12s} {spec.description}{extra}")
     return 0
@@ -185,20 +215,40 @@ def cmd_formats(args: argparse.Namespace) -> int:
 
 def cmd_render(args: argparse.Namespace) -> int:
     engine = ComplianceEngine(load_system(args.system), format=args.format)
-    try:
-        doc = engine.load(args.input, _vector_options(args))
-    except ComplexityError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 2
-    if args.comply:
-        engine.comply(doc)
-
     out = Path(args.output)
     suffix = out.suffix.lower()
+    if len(args.input) > 1 and suffix != ".pdf":
+        print("error: multiple inputs need a .pdf output (one page each)",
+              file=sys.stderr)
+        return 2
+    docs = []
+    for source in args.input:
+        try:
+            docs.append(engine.load(source, _vector_options(args)))
+        except ComplexityError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+    if args.comply:
+        for doc in docs:
+            engine.comply(doc)
+    doc = docs[0]
+
     from designer.render import render_pdf, render_png
 
     if suffix == ".pdf":
-        render_pdf(doc, out, dpi=args.dpi, cmyk=args.cmyk)
+        spec = engine.format
+        is_print = spec is not None and spec.category == "print"
+        bleed = 0.0
+        if is_print:
+            bleed = spec.bleed if spec.bleed is not None else engine.system.bleed
+        marks = args.marks
+        if marks is None:
+            marks = is_print and (args.cmyk or bleed > 0)
+        icc = args.icc or engine.system.icc_profile
+        render_pdf(
+            docs if len(docs) > 1 else doc, out, dpi=args.dpi, cmyk=args.cmyk,
+            format=spec, bleed=bleed, marks=marks, icc_profile=icc,
+        )
     elif suffix in (".png", ".jpg", ".jpeg"):
         image = render_png(
             doc,
@@ -214,8 +264,12 @@ def cmd_render(args: argparse.Namespace) -> int:
         print(f"error: unsupported output type {suffix!r}", file=sys.stderr)
         return 2
 
-    for warning in doc.warnings:
-        print(f"note: {warning}", file=sys.stderr)
+    seen = set()
+    for doc in docs:
+        for warning in doc.warnings:
+            if warning not in seen:
+                seen.add(warning)
+                print(f"note: {warning}", file=sys.stderr)
     print(f"Wrote {out}")
     return 0
 
@@ -261,22 +315,41 @@ def main(argv: list[str] | None = None) -> int:
     _add_vector_args(p)
     p.set_defaults(func=cmd_comply)
 
+    p = sub.add_parser("palette", help="derive a full design system from 2-3 seed brand colors")
+    p.add_argument("seeds", nargs="+", metavar="HEX",
+                   help="2-3 seed colors: primary, accent, optional secondary")
+    p.add_argument("--name", default="Derived palette", help="design system name")
+    p.add_argument("--output", "-o", default=None, metavar="YAML",
+                   help="write the derived system YAML here (usable via --system)")
+    p.add_argument("--json", action="store_true", help="print the system dict as JSON")
+    p.set_defaults(func=cmd_palette)
+
     p = sub.add_parser("tokens", help="print the active design system")
     _add_system_arg(p)
     p.set_defaults(func=cmd_tokens)
 
     p = sub.add_parser("formats", help="list deliverable formats")
+    _add_system_arg(p)
     p.set_defaults(func=cmd_formats)
 
     p = sub.add_parser("render", help="render a design to PNG or print-ready PDF")
-    p.add_argument("input", help="SVG or raster image")
+    p.add_argument("input", nargs="+",
+                   help="SVG or raster image(s); several inputs make a "
+                   "multi-page PDF (front/back, folded panels)")
     p.add_argument("--output", "-o", required=True, help="out.png | out.pdf | out.svg")
     p.add_argument("--width", type=int, default=None, metavar="PX",
                    help="output width in px (PNG only)")
     p.add_argument("--dpi", type=float, default=300.0,
                    help="output density; PDF page size and PNG scale (default 300)")
     p.add_argument("--cmyk", action="store_true",
-                   help="PDF only: convert colors to CMYK (naive, non-ICC)")
+                   help="PDF only: convert colors to CMYK (ICC-managed when a "
+                   "profile is set, else naive)")
+    p.add_argument("--icc", default=None, metavar="PROFILE",
+                   help="PDF only: press CMYK ICC profile for --cmyk "
+                   "(default: the design system's print.icc_profile)")
+    p.add_argument("--marks", action=argparse.BooleanOptionalAction, default=None,
+                   help="PDF only: draw crop/registration marks and a job slug "
+                   "(default: on for print formats with --cmyk or a bleed)")
     p.add_argument("--background", default="#ffffff",
                    help="PNG only: canvas color behind the design")
     p.add_argument("--comply", action="store_true",

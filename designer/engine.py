@@ -30,7 +30,7 @@ class ComplianceEngine:
     ):
         self.system = system
         if isinstance(format, str):
-            format = get_format(format)
+            format = get_format(format, extra=system.formats)
         self.format = format
         base = rules if rules is not None else list(DEFAULT_RULES)
         if format is not None:
@@ -65,8 +65,19 @@ class ComplianceEngine:
             system_name=self.system.name,
             target=doc.source or "<in-memory document>",
         )
-        for rule in self.rules:
-            report.findings.extend(rule.run(doc, self.system, autofix))
+        # Vendor dielines are cut geometry, not artwork: rules must
+        # neither audit nor fix them. They ride on top of the paint
+        # order, so they re-enter at the end.
+        from designer.svg import is_dieline
+
+        dielines = [s for s in doc.shapes if is_dieline(s)]
+        if dielines:
+            doc.shapes = [s for s in doc.shapes if not is_dieline(s)]
+        try:
+            for rule in self.rules:
+                report.findings.extend(rule.run(doc, self.system, autofix))
+        finally:
+            doc.shapes.extend(dielines)
         return report
 
     # ------------------------------------------------------- pipelines

@@ -1,0 +1,87 @@
+{
+ "name": "Design Approval",
+ "engine": "InnoDB",
+ "creation": "2026-08-13 09:00:00.000000",
+ "doctype": "DocType",
+ "fields": [
+  {
+   "fieldname": "request",
+   "fieldtype": "Link",
+   "label": "Design Request",
+   "options": "Design Request",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "campaign",
+   "fieldtype": "Link",
+   "label": "Design Campaign",
+   "options": "Design Campaign"
+  },
+  {
+   "fieldname": "candidate",
+   "fieldtype": "Link",
+   "label": "Candidate",
+   "options": "Design Candidate",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "token",
+   "fieldtype": "Data",
+   "label": "Token",
+   "unique": 1,
+   "read_only": 1,
+   "no_copy": 1,
+   "description": "Random URL-safe token generated server-side on insert; the only handle guests ever see"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Pending\nApproved\nRejected\nChanges Requested",
+   "default": "Pending",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "client_comment",
+   "fieldtype": "Small Text",
+   "label": "Client Comment",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approved_on",
+   "fieldtype": "Datetime",
+   "label": "Approved On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "expires_on",
+   "fieldtype": "Datetime",
+   "label": "Expires On"
+  }
+ ],
+ "modified": "2026-08-13 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "{module_name}",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "Design Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "autoname": "DAP-.#####",
+ "naming_rule": "Expression (old style)",
+ "track_changes": 1
+}

@@ -1,0 +1,85 @@
+{
+ "name": "Design Campaign",
+ "engine": "InnoDB",
+ "creation": "2026-08-13 09:00:00.000000",
+ "doctype": "DocType",
+ "fields": [
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "brief",
+   "fieldtype": "Small Text",
+   "label": "Brief",
+   "description": "Optional; empty means zero-prompt composition"
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "design_system",
+   "fieldtype": "Link",
+   "label": "Design System",
+   "options": "Design System",
+   "reqd": 1
+  },
+  {
+   "fieldname": "formats",
+   "fieldtype": "Table",
+   "label": "Formats",
+   "options": "Design Campaign Format",
+   "reqd": 1
+  },
+  {
+   "fieldname": "master_request",
+   "fieldtype": "Link",
+   "label": "Master Request",
+   "options": "Design Request",
+   "description": "The 1:1 master request whose selected candidate is fanned out across formats"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nProcessing\nReady\nFailed",
+   "default": "Draft",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "error_message",
+   "fieldtype": "Small Text",
+   "label": "Error Message",
+   "read_only": 1
+  }
+ ],
+ "modified": "2026-08-13 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "{module_name}",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "Design Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "autoname": "DCAM-.#####",
+ "naming_rule": "Expression (old style)",
+ "track_changes": 1
+}

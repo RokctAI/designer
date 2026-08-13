@@ -52,6 +52,10 @@ class DesignSystem:
     bleed: float = 0.0            # px of bleed beyond the trim edge
     min_print_stroke: float = 0.0  # thinnest line the press can hold
     max_ink_coverage: float = 0.0  # total CMYK ink %, 0 = unchecked
+    # Path to a press CMYK ICC profile; when set, PDF CMYK output is
+    # converted through it and the profile is embedded as the PDF's
+    # output intent. Unset = naive conversion, reported as unmanaged.
+    icc_profile: str | None = None
 
     # Layout quality
     alignment_tolerance: float = 2.0  # px; edges closer than this should align
@@ -68,6 +72,10 @@ class DesignSystem:
     min_contrast_text: float = 4.5
     min_contrast_large_text: float = 3.0
     large_text_size: float = 24.0
+
+    # Brand-specific deliverable formats, merged over the built-in
+    # catalog by name (designer.formats.FormatSpec instances).
+    formats: list = field(default_factory=list)
 
     def token_rgbs(self) -> list[RGB]:
         return [t.rgb for t in self.colors]
@@ -123,6 +131,8 @@ def _parse_system(data: dict) -> DesignSystem:
     system.max_ink_coverage = float(
         print_cfg.get("max_ink_coverage", system.max_ink_coverage)
     )
+    if print_cfg.get("icc_profile"):
+        system.icc_profile = str(print_cfg["icc_profile"])
 
     type_cfg = data.get("typography", {}) or {}
     if "fonts" in type_cfg:
@@ -156,6 +166,14 @@ def _parse_system(data: dict) -> DesignSystem:
     system.large_text_size = float(
         a11y_cfg.get("large_text_size", system.large_text_size)
     )
+
+    formats_cfg = data.get("formats", {}) or {}
+    if formats_cfg:
+        from designer.formats import format_from_dict
+
+        system.formats = [
+            format_from_dict(name, cfg) for name, cfg in formats_cfg.items()
+        ]
 
     if not system.colors:
         raise ValueError("Design system must define at least one color token")

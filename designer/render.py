@@ -26,10 +26,14 @@ from PIL import Image, ImageDraw
 from designer.color import RGB, parse_color
 from designer.fonts import first_family, is_bold, resolve_font_file, resolve_with_fallback
 from designer.path import path_subpaths
-from designer.svg import Document, GradientDef, Shape
+from designer.svg import Document, GradientDef, Shape, is_dieline
 
 # 96 CSS px per inch is the reference the whole engine works in.
 CSS_DPI = 96.0
+
+# Dielines render stroke-only in this color on screen output; CMYK PDFs
+# use a Separation "CutContour" spot colorspace instead (magenta alternate).
+DIELINE_RGB = (255, 0, 255)
 
 
 class RenderError(ValueError):
@@ -228,6 +232,14 @@ def _draw_shape(
         _draw_text(canvas, shape, scale, doc)
         return
 
+    if is_dieline(shape):
+        width = (shape.numeric("stroke-width") or 1.0) * scale
+        draw = ImageDraw.Draw(canvas)
+        for ring in _shape_polygons(shape, scale):
+            draw.line(list(ring) + [ring[0]], fill=DIELINE_RGB,
+                      width=max(1, round(width)))
+        return
+
     fill = shape.get("fill")
     if fill and fill.strip().lower() not in ("none", "transparent"):
         rings = _shape_polygons(shape, scale)
@@ -310,28 +322,42 @@ def _pdf_escape(text: str) -> bytes:
     return bytes(out)
 
 
-def _rgb_to_cmyk_op(rgb: RGB) -> str:
-    from designer.rules.print_rules import rgb_to_cmyk
-
-    c, m, y, k = rgb_to_cmyk(rgb)
-    return f"{c:.4f} {m:.4f} {y:.4f} {k:.4f}"
-
-
 def render_pdf(
-    doc: Document,
+    doc: Document | list[Document],
     path: str | Path,
     dpi: float = 300.0,
     cmyk: bool = False,
     embed_fonts: bool = True,
+    format: "object | None" = None,
+    bleed: float = 0.0,
+    marks: bool = False,
+    icc_profile: str | Path | None = None,
 ) -> Path:
     """Write a vector PDF.
 
-    Geometry stays vector at any DPI; ``dpi`` only sets the page's
-    physical size (the document's px are treated as CSS px at 96/inch).
-    ``cmyk`` uses a naive, non-ICC conversion — adequate for a first
-    proof, not a replacement for a color-managed workflow.
+    ``doc`` may be a list of Documents: one page each, sharing format,
+    bleed and marks — front/back of a board, panels of a folded piece.
+
+    Geometry stays vector at any DPI. The page's physical size comes
+    from the document's px density: ``format.dpi`` when a format is
+    given, else CSS px at 96/inch.
+
+    ``cmyk`` converts colors to CMYK. With ``icc_profile`` (a press
+    CMYK ICC profile) the conversion is color-managed through the
+    profile, which is also embedded as the PDF's output intent — a
+    press PDF with output intent, not a validated PDF/X file. Without
+    a profile the conversion is naive and reported as unmanaged:
+    adequate for a first proof, not for plates.
+
+    With ``bleed`` (px past trim) the page grows to trim + bleed and a
+    /TrimBox records the finished size. ``marks`` adds a slug area and
+    draws crop marks, registration marks and a job slug line outside
+    the bleed — in registration color (all separations) when ``cmyk``.
     """
-    writer = _PdfWriter(doc, cmyk=cmyk, embed_fonts=embed_fonts)
+    writer = _PdfWriter(
+        doc, cmyk=cmyk, embed_fonts=embed_fonts,
+        format=format, bleed=bleed, marks=marks, icc_profile=icc_profile,
+    )
     data = writer.build(dpi)
     out = Path(path)
     out.write_bytes(data)
@@ -339,15 +365,101 @@ def render_pdf(
 
 
 class _PdfWriter:
-    def __init__(self, doc: Document, cmyk: bool = False, embed_fonts: bool = True):
-        self.doc = doc
+    def __init__(
+        self,
+        doc: Document | list[Document],
+        cmyk: bool = False,
+        embed_fonts: bool = True,
+        format: "object | None" = None,
+        bleed: float = 0.0,
+        marks: bool = False,
+        icc_profile: str | Path | None = None,
+    ):
+        self.docs = list(doc) if isinstance(doc, (list, tuple)) else [doc]
+        if not self.docs:
+            raise RenderError("render_pdf needs at least one document")
+        self.doc = self.docs[0]  # current page while building
         self.cmyk = cmyk
         self.embed_fonts = embed_fonts
+        self.format = format
+        self.bleed = max(0.0, float(bleed))
+        self.marks = marks
+        self._icc = None            # ImageCms transform, when managed
+        self._icc_cache: dict[RGB, tuple[float, float, float, float]] = {}
+        self.icc_bytes: bytes | None = None
+        self.icc_desc = ""
+        if cmyk:
+            self._init_icc(icc_profile)
+        # px density of the document; sets physical size and mark sizes.
+        self.px_dpi = float(getattr(format, "dpi", 0) or CSS_DPI)
+        # Slug: room outside the bleed for marks and the job line.
+        self.slug = self._mm(10.0) if marks else 0.0
+        self.offset = self.bleed + self.slug
         self.objects: list[bytes] = []
         self.fonts: dict[str, _PdfFont] = {}
-        self.images: dict[int, tuple[str, bytes, int, int]] = {}
+        self.uses_cutcontour = False
+        self.images: list[tuple[str, bytes, int, int, str]] = []
         self.shadings: list[tuple[str, GradientDef]] = []
-        self.base_dir = Path(doc.source).parent if doc.source else None
+        self.base_dir = (
+            Path(self.doc.source).parent if self.doc.source else None
+        )
+
+    def _mm(self, mm: float) -> float:
+        return mm * self.px_dpi / 25.4
+
+    # -- color management ------------------------------------------------
+
+    def _init_icc(self, icc_profile: str | Path | None) -> None:
+        """Build one RGB->CMYK transform through the press profile; on
+        any failure fall back to naive conversion and say so."""
+
+        def warn(message: str) -> None:
+            if message not in self.doc.warnings:
+                self.doc.warnings.append(message)
+
+        if not icc_profile:
+            warn(
+                "CMYK color is unmanaged (naive RGB->CMYK conversion) — "
+                "set print.icc_profile to a press CMYK ICC profile for "
+                "color-managed output"
+            )
+            return
+        try:
+            from PIL import ImageCms
+
+            profile = ImageCms.getOpenProfile(str(icc_profile))
+            self._icc = ImageCms.buildTransformFromOpenProfiles(
+                ImageCms.createProfile("sRGB"), profile, "RGB", "CMYK",
+                renderingIntent=ImageCms.Intent.RELATIVE_COLORIMETRIC,
+            )
+            self.icc_bytes = Path(icc_profile).read_bytes()
+            self.icc_desc = (ImageCms.getProfileDescription(profile) or "").strip()
+        except Exception as exc:
+            self._icc = None
+            self.icc_bytes = None
+            warn(
+                f"ICC profile {icc_profile!s} could not be used ({exc}); "
+                "CMYK color is unmanaged (naive RGB->CMYK conversion)"
+            )
+
+    def _to_cmyk(self, rgb: RGB) -> tuple[float, float, float, float]:
+        if self._icc is None:
+            from designer.rules.print_rules import rgb_to_cmyk
+
+            return rgb_to_cmyk(rgb)
+        cached = self._icc_cache.get(rgb)
+        if cached is None:
+            from PIL import ImageCms
+
+            pixel = Image.new("RGB", (1, 1), rgb)
+            c, m, y, k = ImageCms.applyTransform(pixel, self._icc).getpixel((0, 0))
+            cached = (c / 255, m / 255, y / 255, k / 255)
+            self._icc_cache[rgb] = cached
+        return cached
+
+    def _cmyk_op(self, rgb: RGB) -> str:
+        c, m, y, k = self._to_cmyk(rgb)
+        return f"{c:.4f} {m:.4f} {y:.4f} {k:.4f}"
 
     # -- object plumbing -------------------------------------------------
 
@@ -366,12 +478,12 @@ class _PdfWriter:
 
     def _fill_op(self, rgb: RGB) -> str:
         if self.cmyk:
-            return f"{_rgb_to_cmyk_op(rgb)} k"
+            return f"{self._cmyk_op(rgb)} k"
         return f"{rgb[0] / 255:.4f} {rgb[1] / 255:.4f} {rgb[2] / 255:.4f} rg"
 
     def _stroke_op(self, rgb: RGB) -> str:
         if self.cmyk:
-            return f"{_rgb_to_cmyk_op(rgb)} K"
+            return f"{self._cmyk_op(rgb)} K"
         return f"{rgb[0] / 255:.4f} {rgb[1] / 255:.4f} {rgb[2] / 255:.4f} RG"
 
     def _path_ops(self, shape: Shape) -> str:
@@ -389,20 +501,32 @@ class _PdfWriter:
         ops = [
             "q",
             # PDF's origin is bottom-left; flip so document coordinates
-            # (y down from the top-left) map directly.
-            f"1 0 0 -1 0 {doc.height:.3f} cm",
+            # (y down from the top-left) map directly, shifted in by the
+            # bleed + slug offset so (0,0) is the trim's top-left corner.
+            f"1 0 0 -1 {self.offset:.3f} {self.offset + doc.height:.3f} cm",
         ]
+        if self.marks:
+            # Artwork may not paint over the marks: clip it to the bleed box.
+            ops += [
+                "q",
+                f"{-self.bleed:.3f} {-self.bleed:.3f} "
+                f"{doc.width + 2 * self.bleed:.3f} {doc.height + 2 * self.bleed:.3f} re",
+                "W n",
+            ]
 
-        for index, shape in enumerate(doc.shapes):
+        for shape in doc.shapes:
             if shape.tag == "image":
-                ops.extend(self._image_ops(index, shape))
+                ops.extend(self._image_ops(shape))
                 continue
             if shape.tag == "text":
-                ops.extend(self._text_ops(shape, doc.height))
+                ops.extend(self._text_ops(shape))
                 continue
 
             path_ops = self._path_ops(shape)
             if not path_ops:
+                continue
+            if is_dieline(shape):
+                ops.extend(self._dieline_ops(shape, path_ops))
                 continue
             fill = shape.get("fill")
             grad = doc.gradient_by_ref(fill)
@@ -423,10 +547,127 @@ class _PdfWriter:
                 if rgb:
                     width = shape.numeric("stroke-width") or 1.0
                     ops += [self._stroke_op(rgb), f"{width:.3f} w", path_ops, "S"]
+        if self.marks:
+            ops.append("Q")  # end the bleed clip
+            ops.extend(self._marks_ops())
         ops.append("Q")
         return "\n".join(ops)
 
-    def _image_ops(self, index: int, shape: Shape) -> list[str]:
+    def _dieline_ops(self, shape: Shape, path_ops: str) -> list[str]:
+        """Stroke-only cut contour. In CMYK it strokes a Separation
+        'CutContour' spot color with overprint on, so the RIP can pull
+        the cut path without knocking out the artwork beneath."""
+        width = shape.numeric("stroke-width") or 1.0
+        if self.cmyk:
+            self.uses_cutcontour = True
+            return [
+                "q", "/GSov gs", "/CSCut CS", "1 SCN",
+                f"{width:.3f} w", path_ops, "S", "Q",
+            ]
+        r, g, b = DIELINE_RGB
+        return [
+            "q", f"{r / 255:.4f} {g / 255:.4f} {b / 255:.4f} RG",
+            f"{width:.3f} w", path_ops, "S", "Q",
+        ]
+
+    # -- printer's marks -------------------------------------------------
+
+    def _marks_ops(self) -> list[str]:
+        """Crop marks at the trim corners, registration marks at the edge
+        midpoints and a job slug line, all outside the bleed."""
+        doc, b, mm = self.doc, self.bleed, self._mm
+        w, h = doc.width, doc.height
+        reg_stroke = "1 1 1 1 K" if self.cmyk else "0 0 0 RG"
+        reg_fill = "1 1 1 1 k" if self.cmyk else "0 0 0 rg"
+        lw = max(0.25 * self.px_dpi / 72.0, 0.2)  # 0.25pt hairline
+        ops = ["q", reg_stroke, f"{lw:.3f} w"]
+
+        def line(x1: float, y1: float, x2: float, y2: float) -> None:
+            ops.append(f"{x1:.3f} {y1:.3f} m {x2:.3f} {y2:.3f} l S")
+
+        # Crop marks: two per trim corner, starting past the bleed so
+        # they never touch bled artwork.
+        gap, length = b + mm(1.0), mm(4.0)
+        for cx, cy, dx, dy in ((0, 0, -1, -1), (w, 0, 1, -1), (0, h, -1, 1), (w, h, 1, 1)):
+            line(cx + dx * gap, cy, cx + dx * (gap + length), cy)
+            line(cx, cy + dy * gap, cx, cy + dy * (gap + length))
+
+        # Registration marks: crosshair + circle at each edge midpoint.
+        off, radius, cross = b + mm(4.0), mm(1.5), mm(2.5)
+        for cx, cy in ((w / 2, -off), (w / 2, h + off), (-off, h / 2), (w + off, h / 2)):
+            line(cx - cross, cy, cx + cross, cy)
+            line(cx, cy - cross, cx, cy + cross)
+            steps = 24
+            ring = [
+                (cx + radius * np.cos(2 * np.pi * i / steps),
+                 cy + radius * np.sin(2 * np.pi * i / steps))
+                for i in range(steps)
+            ]
+            ops.append(f"{ring[0][0]:.3f} {ring[0][1]:.3f} m")
+            for px, py in ring[1:]:
+                ops.append(f"{px:.3f} {py:.3f} l")
+            ops.append("h S")
+
+        # Fold marks: dashed ticks outside the trim at panel boundaries.
+        panels = tuple(getattr(self.format, "panels", ()) or ())
+        panels_y = tuple(getattr(self.format, "panels_y", ()) or ())
+        if panels or panels_y:
+            ops += ["q", f"[{mm(1.0):.3f} {mm(1.0):.3f}] 0 d"]
+            x = 0.0
+            for panel in panels[:-1]:
+                x += panel
+                line(x, -gap, x, -(gap + length))
+                line(x, h + gap, x, h + gap + length)
+            y = 0.0
+            for panel in panels_y[:-1]:
+                y += panel
+                line(-gap, y, -(gap + length), y)
+                line(w + gap, y, w + gap + length, y)
+            ops.append("Q")
+        ops.append("Q")
+
+        ops.extend(self._slug_ops(reg_fill))
+        return ops
+
+    def _slug_ops(self, reg_fill: str) -> list[str]:
+        """Job slug line: filename, date, colorspace — bottom-left slug."""
+        import datetime
+
+        doc = self.doc
+        name = Path(doc.source).name if doc.source else "untitled"
+        text = (
+            f"{name}  |  {datetime.date.today().isoformat()}  |  "
+            f"{self._colorspace_label()}"
+        )
+        family = first_family("sans-serif") or "sans-serif"
+        key = f"{family}:r"
+        if key not in self.fonts:
+            path, _ = resolve_with_fallback(family, bold=False)
+            if not path:
+                return []
+            self.fonts[key] = _PdfFont(name=f"F{len(self.fonts)}", path=path)
+        font = self.fonts[key]
+        size = self._mm(2.5)
+        y = doc.height + self.bleed + self._mm(8.8)
+        return [
+            "q",
+            "BT",
+            reg_fill,
+            f"/{font.name} {size:.3f} Tf",
+            f"1 0 0 -1 0 {y:.3f} Tm",
+            f"({_pdf_escape(text).decode('latin-1')}) Tj",
+            "ET",
+            "Q",
+        ]
+
+    def _colorspace_label(self) -> str:
+        if not self.cmyk:
+            return "RGB"
+        if self._icc is not None:
+            return f"CMYK ({self.icc_desc or 'ICC managed'})"
+        return "CMYK (unmanaged)"
+
+    def _image_ops(self, shape: Shape) -> list[str]:
         href = shape.get("href") or shape.get("xlink:href") or ""
         img = _decode_href(href, self.base_dir)
         if img is None:
@@ -436,9 +677,15 @@ class _PdfWriter:
         if w is None or h is None:
             return []
         fitted = _fit_slice(img.convert("RGB"), max(1, round(w)), max(1, round(h)))
+        space = "/DeviceRGB"
+        if self.cmyk and self._icc is not None:
+            from PIL import ImageCms
+
+            fitted = ImageCms.applyTransform(fitted, self._icc)
+            space = "/DeviceCMYK"
         raw = zlib.compress(fitted.tobytes())
-        name = f"Im{index}"
-        self.images[index] = (name, raw, fitted.width, fitted.height)
+        name = f"Im{len(self.images)}"
+        self.images.append((name, raw, fitted.width, fitted.height, space))
         # Images draw in a y-down space, so flip back inside the cm.
         return [
             "q",
@@ -447,7 +694,7 @@ class _PdfWriter:
             "Q",
         ]
 
-    def _text_ops(self, shape: Shape, page_height: float) -> list[str]:
+    def _text_ops(self, shape: Shape) -> list[str]:
         if not shape.text:
             return []
         family = first_family(shape.get("font-family")) or "sans-serif"
@@ -477,13 +724,14 @@ class _PdfWriter:
             width = measure(shape.text, family, size, bold=bold).width
             x -= width / 2 if anchor == "middle" else width
         rgb = parse_color(shape.get("fill") or "#000000") or (0, 0, 0)
-        # Text is drawn in unflipped page space, so convert the baseline.
+        # The content stream is y-flipped; counter-flip the text matrix
+        # so glyphs render upright at the document baseline.
         return [
             "q",
             "BT",
             self._fill_op(rgb),
             f"/{font.name} {size:.3f} Tf",
-            f"1 0 0 1 {x:.3f} {page_height - y:.3f} Tm",
+            f"1 0 0 -1 {x:.3f} {y:.3f} Tm",
             f"({_pdf_escape(shape.text).decode('latin-1')}) Tj",
             "ET",
             "Q",
@@ -545,9 +793,7 @@ class _PdfWriter:
 
         def color_str(rgb: RGB) -> str:
             if self.cmyk:
-                from designer.rules.print_rules import rgb_to_cmyk
-
-                return " ".join(f"{v:.4f}" for v in rgb_to_cmyk(rgb))
+                return " ".join(f"{v:.4f}" for v in self._to_cmyk(rgb))
             return " ".join(f"{v / 255:.4f}" for v in rgb)
 
         # Stitch pairwise linear ramps so multi-stop gradients are exact.
@@ -585,11 +831,13 @@ class _PdfWriter:
 
         space = "/DeviceCMYK" if self.cmyk else "/DeviceRGB"
         height = self.doc.height
+        # The `sh` operator fires inside the y-flipped content CTM, so
+        # shading coords are document coords used as-is.
         if grad.kind == "linear":
             x1 = grad.coords.get("x1", 0.0)
-            y1 = height - grad.coords.get("y1", 0.0)
+            y1 = grad.coords.get("y1", 0.0)
             x2 = grad.coords.get("x2", self.doc.width)
-            y2 = height - grad.coords.get("y2", 0.0)
+            y2 = grad.coords.get("y2", 0.0)
             body = (
                 f"<< /ShadingType 2 /ColorSpace {space} "
                 f"/Coords [{x1:.3f} {y1:.3f} {x2:.3f} {y2:.3f}] "
@@ -597,7 +845,7 @@ class _PdfWriter:
             )
         else:
             cx = grad.coords.get("cx", self.doc.width / 2)
-            cy = height - grad.coords.get("cy", height / 2)
+            cy = grad.coords.get("cy", height / 2)
             r = grad.coords.get("r", max(self.doc.width, height) / 2)
             body = (
                 f"<< /ShadingType 3 /ColorSpace {space} "
@@ -609,7 +857,13 @@ class _PdfWriter:
     # -- assembly --------------------------------------------------------
 
     def build(self, dpi: float) -> bytes:
-        content = self._content()  # populates fonts/images/shadings
+        # One content stream per page; fonts/images/shadings accumulate
+        # into a single resource dictionary shared by all pages.
+        contents = []
+        for doc in self.docs:
+            self.doc = doc
+            self.base_dir = Path(doc.source).parent if doc.source else None
+            contents.append(self._content())
 
         font_refs = []
         for font in self.fonts.values():
@@ -617,11 +871,11 @@ class _PdfWriter:
             font_refs.append(f"/{font.name} {font.obj} 0 R")
 
         image_refs = []
-        for _, (name, raw, w, h) in self.images.items():
+        for name, raw, w, h, space in self.images:
             obj = self._add(
                 b"<< /Type /XObject /Subtype /Image /Width %d /Height %d "
-                b"/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode "
-                b"/Length %d >>\nstream\n" % (w, h, len(raw))
+                b"/ColorSpace %s /BitsPerComponent 8 /Filter /FlateDecode "
+                b"/Length %d >>\nstream\n" % (w, h, space.encode("latin-1"), len(raw))
                 + raw
                 + b"\nendstream"
             )
@@ -632,13 +886,6 @@ class _PdfWriter:
             obj = self._shading_object(grad)
             shading_refs.append(f"/{name} {obj} 0 R")
 
-        stream = zlib.compress(content.encode("latin-1", errors="replace"))
-        content_obj = self._add(
-            b"<< /Length %d /Filter /FlateDecode >>\nstream\n" % len(stream)
-            + stream
-            + b"\nendstream"
-        )
-
         resources = "<< "
         if font_refs:
             resources += f"/Font << {' '.join(font_refs)} >> "
@@ -646,39 +893,88 @@ class _PdfWriter:
             resources += f"/XObject << {' '.join(image_refs)} >> "
         if shading_refs:
             resources += f"/Shading << {' '.join(shading_refs)} >> "
+        if self.uses_cutcontour:
+            tint = self._add(
+                b"<< /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] "
+                b"/C1 [0 1 0 0] /N 1 >>"
+            )
+            cs = self._add(
+                f"[/Separation /CutContour /DeviceCMYK {tint} 0 R]".encode("latin-1")
+            )
+            gs = self._add(b"<< /Type /ExtGState /OP true /op true /OPM 1 >>")
+            resources += f"/ColorSpace << /CSCut {cs} 0 R >> "
+            resources += f"/ExtGState << /GSov {gs} 0 R >> "
         resources += ">>"
 
-        # CSS px -> PDF points (72/inch) at the requested output density.
-        pt_scale = 72.0 / CSS_DPI
-        page_w = self.doc.width * pt_scale * (CSS_DPI / CSS_DPI)
-        page_h = self.doc.height * pt_scale
-        page_w = self.doc.width * pt_scale
+        # Document px -> PDF points (72/inch) at the document's density.
+        pt_scale = 72.0 / self.px_dpi
 
         pages_obj = self._reserve()
-        page_obj = self._add(
-            (
-                f"<< /Type /Page /Parent {pages_obj} 0 R "
-                f"/MediaBox [0 0 {page_w:.3f} {page_h:.3f}] "
-                f"/Resources {resources} /Contents {content_obj} 0 R "
-                f"/UserUnit 1 >>"
-            ).encode("latin-1")
-        )
+        kids = []
+        for doc, content in zip(self.docs, contents):
+            # Content coordinates are in px; scale the page down to pt.
+            scaled = f"{pt_scale:.6f} 0 0 {pt_scale:.6f} 0 0 cm\n" + content
+            stream = zlib.compress(scaled.encode("latin-1", errors="replace"))
+            content_obj = self._add(
+                b"<< /Length %d /Filter /FlateDecode >>\nstream\n" % len(stream)
+                + stream
+                + b"\nendstream"
+            )
+
+            page_w = (doc.width + 2 * self.offset) * pt_scale
+            page_h = (doc.height + 2 * self.offset) * pt_scale
+            boxes = f"/MediaBox [0 0 {page_w:.3f} {page_h:.3f}] "
+            if self.offset > 0:
+                trim = self.offset * pt_scale
+                boxes += (
+                    f"/TrimBox [{trim:.3f} {trim:.3f} "
+                    f"{page_w - trim:.3f} {page_h - trim:.3f}] "
+                )
+                edge = self.slug * pt_scale
+                boxes += (
+                    f"/BleedBox [{edge:.3f} {edge:.3f} "
+                    f"{page_w - edge:.3f} {page_h - edge:.3f}] "
+                )
+
+            kids.append(
+                self._add(
+                    (
+                        f"<< /Type /Page /Parent {pages_obj} 0 R "
+                        f"{boxes}"
+                        f"/Resources {resources} /Contents {content_obj} 0 R "
+                        f"/UserUnit 1 >>"
+                    ).encode("latin-1")
+                )
+            )
         self._set(
             pages_obj,
-            f"<< /Type /Pages /Kids [{page_obj} 0 R] /Count 1 >>".encode("latin-1"),
+            (
+                f"<< /Type /Pages /Kids [{' '.join(f'{k} 0 R' for k in kids)}] "
+                f"/Count {len(kids)} >>"
+            ).encode("latin-1"),
         )
+        # Output intent: the press profile travels with the file so the
+        # RIP knows what the CMYK numbers mean.
+        intents = ""
+        if self.cmyk and self.icc_bytes:
+            compressed = zlib.compress(self.icc_bytes)
+            icc_obj = self._add(
+                b"<< /N 4 /Filter /FlateDecode /Length %d >>\nstream\n"
+                % len(compressed)
+                + compressed
+                + b"\nendstream"
+            )
+            label = _pdf_escape(self.icc_desc or "CMYK output profile").decode("latin-1")
+            intent_obj = self._add(
+                (
+                    f"<< /Type /OutputIntent /S /GTS_PDFX "
+                    f"/OutputConditionIdentifier ({label}) /Info ({label}) "
+                    f"/DestOutputProfile {icc_obj} 0 R >>"
+                ).encode("latin-1")
+            )
+            intents = f" /OutputIntents [{intent_obj} 0 R]"
         catalog = self._add(
-            f"<< /Type /Catalog /Pages {pages_obj} 0 R >>".encode("latin-1")
-        )
-
-        # Content coordinates are in px; scale the whole page down to pt.
-        scaled = f"{pt_scale:.6f} 0 0 {pt_scale:.6f} 0 0 cm\n" + content
-        stream = zlib.compress(scaled.encode("latin-1", errors="replace"))
-        self._set(
-            content_obj,
-            b"<< /Length %d /Filter /FlateDecode >>\nstream\n" % len(stream)
-            + stream
-            + b"\nendstream",
+            f"<< /Type /Catalog /Pages {pages_obj} 0 R{intents} >>".encode("latin-1")
         )
 
         out = bytearray(b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n")

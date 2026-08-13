@@ -1,0 +1,30 @@
+{
+ "name": "Design Font",
+ "engine": "InnoDB",
+ "creation": "2026-08-13 09:00:00.000000",
+ "doctype": "DocType",
+ "fields": [
+  {
+   "fieldname": "font_name",
+   "fieldtype": "Data",
+   "label": "Font Name",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "descriptor",
+   "fieldtype": "Data",
+   "label": "Descriptor",
+   "in_list_view": 1,
+   "description": "Plain-language description used in generation prompts, e.g. 'clean geometric sans-serif similar to Inter'"
+  }
+ ],
+ "modified": "2026-08-13 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "{module_name}",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "istable": 1
+}

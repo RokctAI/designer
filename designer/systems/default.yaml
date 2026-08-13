@@ -51,6 +51,11 @@ print:
   bleed: 0            # px beyond trim; 0 = no bleed requirement
   min_stroke: 0.75    # thinnest line the press can hold
   max_ink_coverage: 300  # total CMYK ink %, 0 = unchecked
+  # Path to your printer's CMYK ICC profile (not bundled — profiles are
+  # licensed). When set, CMYK PDFs are converted through it and it is
+  # embedded as the PDF's output intent; unset = naive conversion,
+  # reported as unmanaged.
+  # icc_profile: profiles/press.icc
 
 accessibility:
   min_contrast_text: 4.5

@@ -115,6 +115,19 @@ class Document:
         return None
 
 
+def is_dieline(shape: Shape) -> bool:
+    """Vendor dieline geometry (cut/crease contours). Marked in the
+    source SVG by an id or class of ``dieline`` on the shape or an
+    enclosing group; travels through the pipeline untouched."""
+    return shape.attrs.get("data-dieline") == "true"
+
+
+def _element_marks_dieline(element: ET.Element) -> bool:
+    if element.get("id") == "dieline":
+        return True
+    return "dieline" in (element.get("class") or "").split()
+
+
 def _shape_area(shape: Shape, doc_w: float, doc_h: float) -> float | None:
     if shape.tag == "rect":
         w, h = shape.numeric("width"), shape.numeric("height")
@@ -236,9 +249,11 @@ def parse_svg(path: str | Path) -> Document:
         inherited: dict[str, str],
         matrix: Matrix,
         depth: int = 0,
+        dieline: bool = False,
     ) -> None:
         tag = _strip_ns(element.tag)
         style = resolve_style(element, inherited)
+        dieline = dieline or _element_marks_dieline(element)
 
         try:
             own_matrix = parse_transform(element.get("transform"))
@@ -249,7 +264,7 @@ def parse_svg(path: str | Path) -> Document:
 
         if tag in ("g", "svg", "a"):
             for child in element:
-                walk(child, style, combined, depth)
+                walk(child, style, combined, depth, dieline)
             return
 
         if tag == "defs":
@@ -305,9 +320,9 @@ def parse_svg(path: str | Path) -> Document:
             target_tag = _strip_ns(target.tag)
             if target_tag in ("symbol", "g"):
                 for child in target:
-                    walk(child, style, use_matrix, depth + 1)
+                    walk(child, style, use_matrix, depth + 1, dieline)
             else:
-                walk(target, style, use_matrix, depth + 1)
+                walk(target, style, use_matrix, depth + 1, dieline)
             return
 
         if tag in ("metadata", "title", "desc", "foreignObject"):
@@ -339,6 +354,8 @@ def parse_svg(path: str | Path) -> Document:
                     )
 
             shape = Shape(tag=tag, attrs=attrs, text=text_content)
+            if dieline:
+                shape.attrs["data-dieline"] = "true"
             _place(shape, combined, doc, warn)
             doc.shapes.append(shape)
             return

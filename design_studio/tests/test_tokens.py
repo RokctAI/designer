@@ -1,0 +1,38 @@
+"""Approval-link token generation and expiry."""
+
+from datetime import datetime, timedelta
+
+from design_studio_src.lib import tokens as lib
+
+
+def test_tokens_are_random_urlsafe_and_long():
+    seen = {lib.generate_review_token() for _ in range(50)}
+    assert len(seen) == 50
+    for token in seen:
+        assert len(token) >= 40
+        assert all(c.isalnum() or c in "-_" for c in token)
+
+
+def test_tokens_equal_constant_time_compare():
+    token = lib.generate_review_token()
+    assert lib.tokens_equal(token, token)
+    assert not lib.tokens_equal(token, token[:-1] + "x")
+    assert not lib.tokens_equal(token, "")
+    assert not lib.tokens_equal(None, token)
+
+
+def test_expiry():
+    now = datetime(2026, 1, 1, 12, 0)
+    assert lib.default_expiry(now) == now + timedelta(days=14)
+    assert lib.default_expiry(now, days=2) == now + timedelta(days=2)
+    assert not lib.token_expired(now + timedelta(seconds=1), now)
+    assert lib.token_expired(now, now)
+    assert lib.token_expired(now - timedelta(days=1), now)
+    assert not lib.token_expired(None, now)  # no expiry set = never
+
+
+def test_decisions():
+    for good in ("Approved", "Rejected", "Changes Requested"):
+        assert lib.is_valid_decision(good)
+    for bad in ("approved", "", None, "Pending", "yes"):
+        assert not lib.is_valid_decision(bad)
