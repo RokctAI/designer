@@ -253,3 +253,7 @@ in the report, not just in this file.
 pip install -e . pytest
 python -m pytest tests/ -q
 ```
+
+## Agency operations layer
+
+`design_studio/` is a Frappe app fragment (agency-as-a-service shell around this engine): see [design_studio/README.md](design_studio/README.md).
