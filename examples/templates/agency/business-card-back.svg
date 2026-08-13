@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1063 590.6" width="1063" height="590.6">
+  <!-- Business card back, 90x50mm trim at 300dpi, full-bleed primary. -->
+  <rect x="-35.4" y="-35.4" width="1133.8" height="661.4" fill="#1a56db" data-token="advertiser-1"/>
+  <image data-slot="logo" x="451.5" y="96" width="160" height="160" href=""/>
+  <text data-slot="business-name" data-fit="shrink" data-fit-width="935" data-fit-height="64"
+        x="531.5" y="368" text-anchor="middle" font-size="56" font-weight="bold"
+        fill="#ffffff" data-token="advertiser-5" font-family="DejaVu Sans">Business Name</text>
+  <rect x="431.5" y="400" width="200" height="10" fill="#f59e0b" data-token="advertiser-2"/>
+  <text data-slot="address" data-fit="shrink" data-fit-width="935" data-fit-height="36"
+        x="531.5" y="480" text-anchor="middle" font-size="28" fill="#ffffff"
+        data-token="advertiser-5" font-family="DejaVu Sans">Address</text>
+</svg>

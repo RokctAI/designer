@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 826.8 177.2" width="826.8" height="177.2">
+  <!-- Pen barrel print strip, 70x15mm at 300dpi (pen-barrel-70x15
+       format), 2mm bleed. One line: name left, phone right. -->
+  <rect x="-23.6" y="-23.6" width="874" height="224.4" fill="#1a56db" data-token="advertiser-1"/>
+  <rect x="-23.6" y="153.6" width="874" height="47.2" fill="#f59e0b" data-token="advertiser-2"/>
+  <text data-slot="business-name" data-fit="shrink" data-fit-width="480" data-fit-height="80"
+        x="40" y="112" font-size="64" font-weight="bold" fill="#ffffff"
+        data-token="advertiser-5" font-family="DejaVu Sans">Business Name</text>
+  <text data-slot="phone" data-fit="shrink" data-fit-width="280" data-fit-height="64"
+        x="786.8" y="112" text-anchor="end" font-size="48" fill="#ffffff"
+        data-token="advertiser-5" font-family="DejaVu Sans">Phone</text>
+</svg>

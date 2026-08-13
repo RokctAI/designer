@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3507.9 2480.3" width="3507.9" height="2480.3">
+  <!-- A4 landscape z-fold outside face at 300dpi, 3mm bleed. Panel
+       geometry follows the z-fold-a4 format: 100/99/98mm panels, so
+       fold lines sit at x=1181.1 and x=2350.4; the rightmost 98mm
+       panel folds in (2mm narrower). Content zones stay inside each
+       panel with a ~100px inner margin and never cross a fold. -->
+  <rect x="-35.4" y="-35.4" width="3578.7" height="2551.1" fill="#f3f4f6" data-token="advertiser-4"/>
+  <!-- Panel 1 (cover, 100mm): full-height primary field. -->
+  <rect x="-35.4" y="-35.4" width="1216.5" height="2551.1" fill="#1a56db" data-token="advertiser-1"/>
+  <image data-slot="logo" x="340" y="560" width="500" height="500" href=""/>
+  <text data-slot="business-name" data-fit="shrink" data-fit-width="980" data-fit-height="160"
+        x="590.5" y="1420" text-anchor="middle" font-size="130" font-weight="bold"
+        fill="#ffffff" data-token="advertiser-5" font-family="DejaVu Sans">Business Name</text>
+  <rect x="440.5" y="1500" width="300" height="16" fill="#f59e0b" data-token="advertiser-2"/>
+  <!-- Panel 2 (99mm): the message. -->
+  <text data-slot="tagline" data-fit="shrink" data-fit-width="1000" data-fit-height="140"
+        x="1301" y="1060" font-size="110" font-weight="bold"
+        fill="#111827" data-token="advertiser-3" font-family="DejaVu Sans">Tagline</text>
+  <rect x="1301" y="1140" width="420" height="24" fill="#f59e0b" data-token="advertiser-2"/>
+  <!-- Panel 3 (fold-in, 98mm — 2mm narrower): contact block on paper. -->
+  <rect x="2350.4" y="-35.4" width="1192.9" height="2551.1" fill="#ffffff" data-token="advertiser-6"/>
+  <rect x="2350.4" y="-35.4" width="24" height="2551.1" fill="#f59e0b" data-token="advertiser-2"/>
+  <text data-slot="phone" data-fit="shrink" data-fit-width="950" data-fit-height="80"
+        x="2474.4" y="1000" font-size="64" font-weight="bold"
+        fill="#1a56db" data-token="advertiser-1" font-family="DejaVu Sans">Phone</text>
+  <text data-slot="email" data-fit="shrink" data-fit-width="950" data-fit-height="72"
+        x="2474.4" y="1130" font-size="56" fill="#111827"
+        data-token="advertiser-3" font-family="DejaVu Sans">Email</text>
+  <text data-slot="address" data-fit="shrink" data-fit-width="950" data-fit-height="72"
+        x="2474.4" y="1250" font-size="56" fill="#111827"
+        data-token="advertiser-3" font-family="DejaVu Sans">Address</text>
+</svg>

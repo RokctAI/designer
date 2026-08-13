@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10039 23622" width="10039" height="23622">
+  <!-- Pull-up banner, 850x2000mm at 300dpi, 3mm bleed. Key content
+       sits in the upper two thirds — the bottom of a pull-up curves
+       into the cassette and reads poorly. -->
+  <rect x="-35.4" y="-35.4" width="10109.8" height="23692.8" fill="#f3f4f6" data-token="advertiser-4"/>
+  <rect x="-35.4" y="-35.4" width="10109.8" height="6235.4" fill="#1a56db" data-token="advertiser-1"/>
+  <image data-slot="logo" x="3519.5" y="800" width="3000" height="3000" href=""/>
+  <text data-slot="business-name" data-fit="shrink" data-fit-width="9200" data-fit-height="950"
+        x="5019.5" y="5100" text-anchor="middle"
+        font-size="760" font-weight="bold" fill="#ffffff" data-token="advertiser-5"
+        font-family="DejaVu Sans">Business Name</text>
+  <rect x="2519.5" y="6200" width="5000" height="130" fill="#f59e0b" data-token="advertiser-2"/>
+  <text data-slot="tagline" data-fit="shrink" data-fit-width="9200" data-fit-height="600"
+        x="5019.5" y="8300" text-anchor="middle" font-size="450"
+        fill="#111827" data-token="advertiser-3" font-family="DejaVu Sans">Tagline</text>
+  <text data-slot="phone" data-fit="shrink" data-fit-width="9200" data-fit-height="700"
+        x="5019.5" y="14800" text-anchor="middle" font-size="560"
+        font-weight="bold" fill="#1a56db" data-token="advertiser-1"
+        font-family="DejaVu Sans">Phone</text>
+  <text data-slot="email" data-fit="shrink" data-fit-width="9200" data-fit-height="480"
+        x="5019.5" y="15800" text-anchor="middle" font-size="380"
+        fill="#111827" data-token="advertiser-3" font-family="DejaVu Sans">Email</text>
+  <text data-slot="address" data-fit="shrink" data-fit-width="9200" data-fit-height="480"
+        x="5019.5" y="16700" text-anchor="middle" font-size="380"
+        fill="#111827" data-token="advertiser-3" font-family="DejaVu Sans">Address</text>
+  <rect x="-35.4" y="21600" width="10109.8" height="2057.4" fill="#1a56db" data-token="advertiser-1"/>
+</svg>

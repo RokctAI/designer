@@ -101,6 +101,12 @@ _FORMATS: dict[str, FormatSpec] = {
                    description="A3 portrait poster"),
         FormatSpec("business-card", 336, 192, "print", margin=0.08, min_text_size=7,
                    description="EU business card 85x54mm"),
+        # Merchandise print strip: the printable band around a pen
+        # barrel. Tiny bleed (2mm) — pad printers wrap the strip.
+        FormatSpec("pen-barrel-70x15", mm_to_px(70, 300), mm_to_px(15, 300),
+                   "print", margin=0.08, min_text_size=mm_to_px(2, 300), dpi=300,
+                   bleed=mm_to_px(2, 300),
+                   description="Pen barrel print strip 70x15mm at 300dpi"),
         # Large-format print at press-native 300dpi (mm x 300 / 25.4). Bleed is
         # not part of the canvas: the trim size is here, the bleed allowance
         # comes from the design system's print.bleed (px in this same 300dpi
