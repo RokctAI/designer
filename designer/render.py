@@ -323,15 +323,27 @@ def render_pdf(
     dpi: float = 300.0,
     cmyk: bool = False,
     embed_fonts: bool = True,
+    format: "object | None" = None,
+    bleed: float = 0.0,
+    marks: bool = False,
 ) -> Path:
     """Write a vector PDF.
 
-    Geometry stays vector at any DPI; ``dpi`` only sets the page's
-    physical size (the document's px are treated as CSS px at 96/inch).
-    ``cmyk`` uses a naive, non-ICC conversion — adequate for a first
-    proof, not a replacement for a color-managed workflow.
+    Geometry stays vector at any DPI. The page's physical size comes
+    from the document's px density: ``format.dpi`` when a format is
+    given, else CSS px at 96/inch. ``cmyk`` uses a naive, non-ICC
+    conversion — adequate for a first proof, not a replacement for a
+    color-managed workflow.
+
+    With ``bleed`` (px past trim) the page grows to trim + bleed and a
+    /TrimBox records the finished size. ``marks`` adds a slug area and
+    draws crop marks, registration marks and a job slug line outside
+    the bleed — in registration color (all separations) when ``cmyk``.
     """
-    writer = _PdfWriter(doc, cmyk=cmyk, embed_fonts=embed_fonts)
+    writer = _PdfWriter(
+        doc, cmyk=cmyk, embed_fonts=embed_fonts,
+        format=format, bleed=bleed, marks=marks,
+    )
     data = writer.build(dpi)
     out = Path(path)
     out.write_bytes(data)
@@ -339,15 +351,34 @@ def render_pdf(
 
 
 class _PdfWriter:
-    def __init__(self, doc: Document, cmyk: bool = False, embed_fonts: bool = True):
+    def __init__(
+        self,
+        doc: Document,
+        cmyk: bool = False,
+        embed_fonts: bool = True,
+        format: "object | None" = None,
+        bleed: float = 0.0,
+        marks: bool = False,
+    ):
         self.doc = doc
         self.cmyk = cmyk
         self.embed_fonts = embed_fonts
+        self.format = format
+        self.bleed = max(0.0, float(bleed))
+        self.marks = marks
+        # px density of the document; sets physical size and mark sizes.
+        self.px_dpi = float(getattr(format, "dpi", 0) or CSS_DPI)
+        # Slug: room outside the bleed for marks and the job line.
+        self.slug = self._mm(10.0) if marks else 0.0
+        self.offset = self.bleed + self.slug
         self.objects: list[bytes] = []
         self.fonts: dict[str, _PdfFont] = {}
         self.images: dict[int, tuple[str, bytes, int, int]] = {}
         self.shadings: list[tuple[str, GradientDef]] = []
         self.base_dir = Path(doc.source).parent if doc.source else None
+
+    def _mm(self, mm: float) -> float:
+        return mm * self.px_dpi / 25.4
 
     # -- object plumbing -------------------------------------------------
 
@@ -389,16 +420,25 @@ class _PdfWriter:
         ops = [
             "q",
             # PDF's origin is bottom-left; flip so document coordinates
-            # (y down from the top-left) map directly.
-            f"1 0 0 -1 0 {doc.height:.3f} cm",
+            # (y down from the top-left) map directly, shifted in by the
+            # bleed + slug offset so (0,0) is the trim's top-left corner.
+            f"1 0 0 -1 {self.offset:.3f} {self.offset + doc.height:.3f} cm",
         ]
+        if self.marks:
+            # Artwork may not paint over the marks: clip it to the bleed box.
+            ops += [
+                "q",
+                f"{-self.bleed:.3f} {-self.bleed:.3f} "
+                f"{doc.width + 2 * self.bleed:.3f} {doc.height + 2 * self.bleed:.3f} re",
+                "W n",
+            ]
 
         for index, shape in enumerate(doc.shapes):
             if shape.tag == "image":
                 ops.extend(self._image_ops(index, shape))
                 continue
             if shape.tag == "text":
-                ops.extend(self._text_ops(shape, doc.height))
+                ops.extend(self._text_ops(shape))
                 continue
 
             path_ops = self._path_ops(shape)
@@ -423,8 +463,87 @@ class _PdfWriter:
                 if rgb:
                     width = shape.numeric("stroke-width") or 1.0
                     ops += [self._stroke_op(rgb), f"{width:.3f} w", path_ops, "S"]
+        if self.marks:
+            ops.append("Q")  # end the bleed clip
+            ops.extend(self._marks_ops())
         ops.append("Q")
         return "\n".join(ops)
+
+    # -- printer's marks -------------------------------------------------
+
+    def _marks_ops(self) -> list[str]:
+        """Crop marks at the trim corners, registration marks at the edge
+        midpoints and a job slug line, all outside the bleed."""
+        doc, b, mm = self.doc, self.bleed, self._mm
+        w, h = doc.width, doc.height
+        reg_stroke = "1 1 1 1 K" if self.cmyk else "0 0 0 RG"
+        reg_fill = "1 1 1 1 k" if self.cmyk else "0 0 0 rg"
+        lw = max(0.25 * self.px_dpi / 72.0, 0.2)  # 0.25pt hairline
+        ops = ["q", reg_stroke, f"{lw:.3f} w"]
+
+        def line(x1: float, y1: float, x2: float, y2: float) -> None:
+            ops.append(f"{x1:.3f} {y1:.3f} m {x2:.3f} {y2:.3f} l S")
+
+        # Crop marks: two per trim corner, starting past the bleed so
+        # they never touch bled artwork.
+        gap, length = b + mm(1.0), mm(4.0)
+        for cx, cy, dx, dy in ((0, 0, -1, -1), (w, 0, 1, -1), (0, h, -1, 1), (w, h, 1, 1)):
+            line(cx + dx * gap, cy, cx + dx * (gap + length), cy)
+            line(cx, cy + dy * gap, cx, cy + dy * (gap + length))
+
+        # Registration marks: crosshair + circle at each edge midpoint.
+        off, radius, cross = b + mm(4.0), mm(1.5), mm(2.5)
+        for cx, cy in ((w / 2, -off), (w / 2, h + off), (-off, h / 2), (w + off, h / 2)):
+            line(cx - cross, cy, cx + cross, cy)
+            line(cx, cy - cross, cx, cy + cross)
+            steps = 24
+            ring = [
+                (cx + radius * np.cos(2 * np.pi * i / steps),
+                 cy + radius * np.sin(2 * np.pi * i / steps))
+                for i in range(steps)
+            ]
+            ops.append(f"{ring[0][0]:.3f} {ring[0][1]:.3f} m")
+            for px, py in ring[1:]:
+                ops.append(f"{px:.3f} {py:.3f} l")
+            ops.append("h S")
+        ops.append("Q")
+
+        ops.extend(self._slug_ops(reg_fill))
+        return ops
+
+    def _slug_ops(self, reg_fill: str) -> list[str]:
+        """Job slug line: filename, date, colorspace — bottom-left slug."""
+        import datetime
+
+        doc = self.doc
+        name = Path(doc.source).name if doc.source else "untitled"
+        text = (
+            f"{name}  |  {datetime.date.today().isoformat()}  |  "
+            f"{self._colorspace_label()}"
+        )
+        family = first_family("sans-serif") or "sans-serif"
+        key = f"{family}:r"
+        if key not in self.fonts:
+            path, _ = resolve_with_fallback(family, bold=False)
+            if not path:
+                return []
+            self.fonts[key] = _PdfFont(name=f"F{len(self.fonts)}", path=path)
+        font = self.fonts[key]
+        size = self._mm(2.5)
+        y = doc.height + self.bleed + self._mm(8.8)
+        return [
+            "q",
+            "BT",
+            reg_fill,
+            f"/{font.name} {size:.3f} Tf",
+            f"1 0 0 -1 0 {y:.3f} Tm",
+            f"({_pdf_escape(text).decode('latin-1')}) Tj",
+            "ET",
+            "Q",
+        ]
+
+    def _colorspace_label(self) -> str:
+        return "CMYK (unmanaged)" if self.cmyk else "RGB"
 
     def _image_ops(self, index: int, shape: Shape) -> list[str]:
         href = shape.get("href") or shape.get("xlink:href") or ""
@@ -447,7 +566,7 @@ class _PdfWriter:
             "Q",
         ]
 
-    def _text_ops(self, shape: Shape, page_height: float) -> list[str]:
+    def _text_ops(self, shape: Shape) -> list[str]:
         if not shape.text:
             return []
         family = first_family(shape.get("font-family")) or "sans-serif"
@@ -477,13 +596,14 @@ class _PdfWriter:
             width = measure(shape.text, family, size, bold=bold).width
             x -= width / 2 if anchor == "middle" else width
         rgb = parse_color(shape.get("fill") or "#000000") or (0, 0, 0)
-        # Text is drawn in unflipped page space, so convert the baseline.
+        # The content stream is y-flipped; counter-flip the text matrix
+        # so glyphs render upright at the document baseline.
         return [
             "q",
             "BT",
             self._fill_op(rgb),
             f"/{font.name} {size:.3f} Tf",
-            f"1 0 0 1 {x:.3f} {page_height - y:.3f} Tm",
+            f"1 0 0 -1 {x:.3f} {y:.3f} Tm",
             f"({_pdf_escape(shape.text).decode('latin-1')}) Tj",
             "ET",
             "Q",
@@ -585,11 +705,13 @@ class _PdfWriter:
 
         space = "/DeviceCMYK" if self.cmyk else "/DeviceRGB"
         height = self.doc.height
+        # The `sh` operator fires inside the y-flipped content CTM, so
+        # shading coords are document coords used as-is.
         if grad.kind == "linear":
             x1 = grad.coords.get("x1", 0.0)
-            y1 = height - grad.coords.get("y1", 0.0)
+            y1 = grad.coords.get("y1", 0.0)
             x2 = grad.coords.get("x2", self.doc.width)
-            y2 = height - grad.coords.get("y2", 0.0)
+            y2 = grad.coords.get("y2", 0.0)
             body = (
                 f"<< /ShadingType 2 /ColorSpace {space} "
                 f"/Coords [{x1:.3f} {y1:.3f} {x2:.3f} {y2:.3f}] "
@@ -597,7 +719,7 @@ class _PdfWriter:
             )
         else:
             cx = grad.coords.get("cx", self.doc.width / 2)
-            cy = height - grad.coords.get("cy", height / 2)
+            cy = grad.coords.get("cy", height / 2)
             r = grad.coords.get("r", max(self.doc.width, height) / 2)
             body = (
                 f"<< /ShadingType 3 /ColorSpace {space} "
@@ -648,17 +770,29 @@ class _PdfWriter:
             resources += f"/Shading << {' '.join(shading_refs)} >> "
         resources += ">>"
 
-        # CSS px -> PDF points (72/inch) at the requested output density.
-        pt_scale = 72.0 / CSS_DPI
-        page_w = self.doc.width * pt_scale * (CSS_DPI / CSS_DPI)
-        page_h = self.doc.height * pt_scale
-        page_w = self.doc.width * pt_scale
+        # Document px -> PDF points (72/inch) at the document's density.
+        pt_scale = 72.0 / self.px_dpi
+        page_w = (self.doc.width + 2 * self.offset) * pt_scale
+        page_h = (self.doc.height + 2 * self.offset) * pt_scale
+
+        boxes = f"/MediaBox [0 0 {page_w:.3f} {page_h:.3f}] "
+        if self.offset > 0:
+            trim = self.offset * pt_scale
+            boxes += (
+                f"/TrimBox [{trim:.3f} {trim:.3f} "
+                f"{page_w - trim:.3f} {page_h - trim:.3f}] "
+            )
+            edge = self.slug * pt_scale
+            boxes += (
+                f"/BleedBox [{edge:.3f} {edge:.3f} "
+                f"{page_w - edge:.3f} {page_h - edge:.3f}] "
+            )
 
         pages_obj = self._reserve()
         page_obj = self._add(
             (
                 f"<< /Type /Page /Parent {pages_obj} 0 R "
-                f"/MediaBox [0 0 {page_w:.3f} {page_h:.3f}] "
+                f"{boxes}"
                 f"/Resources {resources} /Contents {content_obj} 0 R "
                 f"/UserUnit 1 >>"
             ).encode("latin-1")

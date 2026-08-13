@@ -222,7 +222,16 @@ def cmd_render(args: argparse.Namespace) -> int:
     from designer.render import render_pdf, render_png
 
     if suffix == ".pdf":
-        render_pdf(doc, out, dpi=args.dpi, cmyk=args.cmyk)
+        spec = engine.format
+        is_print = spec is not None and spec.category == "print"
+        bleed = engine.system.bleed if is_print else 0.0
+        marks = args.marks
+        if marks is None:
+            marks = is_print and (args.cmyk or bleed > 0)
+        render_pdf(
+            doc, out, dpi=args.dpi, cmyk=args.cmyk,
+            format=spec, bleed=bleed, marks=marks,
+        )
     elif suffix in (".png", ".jpg", ".jpeg"):
         image = render_png(
             doc,
@@ -310,6 +319,9 @@ def main(argv: list[str] | None = None) -> int:
                    help="output density; PDF page size and PNG scale (default 300)")
     p.add_argument("--cmyk", action="store_true",
                    help="PDF only: convert colors to CMYK (naive, non-ICC)")
+    p.add_argument("--marks", action=argparse.BooleanOptionalAction, default=None,
+                   help="PDF only: draw crop/registration marks and a job slug "
+                   "(default: on for print formats with --cmyk or a bleed)")
     p.add_argument("--background", default="#ffffff",
                    help="PNG only: canvas color behind the design")
     p.add_argument("--comply", action="store_true",
