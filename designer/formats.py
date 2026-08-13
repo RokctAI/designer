@@ -6,8 +6,10 @@ target medium. Compliance against a format is enforced by the rules in
 ``designer.rules.format_rules`` when a format is passed to the engine.
 
 Sizes are in px at their native/common resolution (small print formats
-use 96dpi equivalents; large-format expo prints are press-native 300dpi,
-as their descriptions say; the SVG is resolution-independent anyway).
+use 96dpi equivalents; large-format prints are press-native, recorded
+in ``dpi``; the SVG is resolution-independent anyway). A design system
+can add its own formats (tokens.py parses a ``formats:`` block into
+FormatSpecs via ``format_from_dict``) which merge over this catalog.
 """
 
 from __future__ import annotations

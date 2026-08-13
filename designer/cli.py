@@ -6,7 +6,8 @@
   designer tokens                             show the active system
   designer formats                            list deliverable formats
   designer render in.svg -o out.png           rasterize (PNG)
-  designer render in.svg -o out.pdf --dpi 300 vector PDF for print
+  designer render in.svg -o out.pdf --cmyk    press PDF (marks + bleed)
+  designer render front.svg back.svg -o b.pdf two-page (double-sided) PDF
 """
 
 from __future__ import annotations

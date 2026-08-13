@@ -34,16 +34,39 @@ AI image  ──►  vectorize  ──►  audit against design system  ──�
 - **Deliverable formats — beyond logos.** A built-in catalog of real
   deliverables (`designer formats`): Instagram post/story, X post,
   YouTube thumbnail, LinkedIn/Facebook banners, OG image, A4/A3
-  posters, business card, display ads, slides. Passing
+  posters, business card, display ads, slides — plus large-format and
+  folded print: `signboard-2000x800` (150dpi grand format),
+  `z-fold-a4` (three panels, fold-in panel 2mm narrower),
+  `corporate-folder-a4` (5mm capacity spine + pocket panel). Passing
   `--format instagram-story` rescales the artwork onto the exact
   target canvas (paths, gradients and text transformed together) and
   enforces per-format safe margins and minimum legible text size —
-  plus a text-hierarchy check for multi-text layouts.
-- **Print & screen output.** `designer render art.svg -o ad.pdf --dpi 300`
+  plus a text-hierarchy check for multi-text layouts. Your design
+  system YAML can add brand-specific formats (`formats:` block, mm or
+  px) that merge into the catalog.
+- **Print & screen output.** `designer render art.svg -o ad.pdf`
   writes a real vector PDF (embedded TrueType fonts, axial/radial
   shadings, Flate images, optional CMYK) — and `-o card.png` rasterizes
   with supersampled antialiasing, even-odd holes and gradients. No
   cairo, no headless browser, no external binaries.
+- **Press-ready PDF geometry.** For print formats with a bleed, the
+  page grows to trim + bleed + slug and the PDF carries crop marks,
+  registration marks (drawn on every separation in CMYK), dashed fold
+  marks at panel boundaries, a job slug line, and proper
+  MediaBox/TrimBox/BleedBox (`--marks/--no-marks`). Several inputs
+  make one multi-page PDF: `designer render front.svg back.svg -o
+  board.pdf` for double-sided boards and folded pieces.
+- **ICC-managed CMYK.** Point `print.icc_profile` at your printer's
+  CMYK profile and `--cmyk` converts fills, strokes, gradient stops
+  and embedded images through it, embedding the profile as the PDF's
+  output intent — a press PDF with output intent (not a validated
+  PDF/X file). Without a profile the conversion is naive and the
+  output is explicitly reported as an unmanaged proof.
+- **Dieline passthrough.** A group or shape with id/class `dieline`
+  (gazebo panels, pens, folders) is never audited or auto-fixed,
+  renders stroke-only in a dedicated color, and in CMYK PDFs strokes a
+  `CutContour` spot separation with overprint — the way cutter vendors
+  expect to receive it.
 - **Templates.** A slot-marked SVG plus captured content renders a
   finished design in milliseconds — text fitted to its box with real
   glyph metrics, size-inappropriate slots dropped (small ads lose the
@@ -100,9 +123,12 @@ designer comply art.png --format instagram-story -o story.svg
 # Gate a pipeline: fail CI when a deliverable is off-brand
 designer audit deliverable.svg --min-score 95 --json
 
-# Deliver it: print-ready PDF, or a raster for the web
-designer render art.svg -o ad.pdf --dpi 300 --cmyk --comply
+# Deliver it: press PDF with marks, or a raster for the web
+designer render art.svg -o ad.pdf --format a4-poster --cmyk --comply
 designer render art.svg -o card.png --width 1200
+
+# Double-sided signboard: two pages, shared format, marks on both
+designer render front.svg back.svg -o board.pdf --format signboard-2000x800 --cmyk
 ```
 
 ## Start from two colours
@@ -152,6 +178,19 @@ print:                       # enforced for print formats only
   bleed: 9                   # px past trim for full-bleed artwork
   min_stroke: 0.75           # thinnest line the press can hold
   max_ink_coverage: 240      # total CMYK ink %
+  # Your printer's CMYK ICC profile (never bundled — profiles are
+  # licensed). Set: --cmyk converts through it and embeds it as the
+  # PDF output intent. Unset: naive conversion, reported as unmanaged.
+  icc_profile: profiles/press.icc
+formats:                     # brand formats merged into the catalog
+  shelf-strip:
+    unit: mm                 # mm converts at the format's dpi (default px)
+    dpi: 300
+    width: 1000
+    height: 60
+    category: print
+    bleed: 3                 # overrides print.bleed for this format
+    panels: [250, 250, 250, 250]   # fold marks at panel boundaries
 stroke:
   widths: [1, 2, 4, 8]
 accessibility:
@@ -211,7 +250,8 @@ save(doc, "poster.svg")
   reading stylized display type that OCR cannot;
 - brand-system linting for whole campaigns (cross-deliverable consistency);
 - a feedback loop that turns audit findings into regeneration prompts;
-- ICC-managed color for press instead of the current naive CMYK.
+- full PDF/X-4 conformance (XMP metadata, validated output conditions)
+  on top of the current press PDF with output intent.
 
 ## Known limitations (verified by adversarial testing)
 
@@ -237,8 +277,12 @@ in the report, not just in this file.
 - **Gradients:** linear and radial (including diagonal, subtle and
   off-center) are reconstructed, and flat color-blocking is rejected by
   a smoothness test; conic and mesh gradients still posterize.
-- **CMYK conversion is naive**, adequate for a proof and an ink-coverage
-  sanity check — not a color-managed workflow.
+- **CMYK is only color-managed when you supply a profile.** With
+  `print.icc_profile` set, conversion runs through littlecms and the
+  profile ships in the PDF as its output intent — but the file is
+  *not* validated PDF/X and the engine does not claim it is. Without
+  a profile the conversion is naive: adequate for a proof and the
+  ink-coverage sanity check, and reported as unmanaged.
 - **Fonts must be installed to be measured or rendered.** A missing
   family falls back to a substitute face and the difference is
   reported, never silently applied.
