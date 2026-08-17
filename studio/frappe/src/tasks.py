@@ -63,32 +63,45 @@ def cleanup_raw_files():
 
 def fail_stuck_requests():
     """Crash recovery: a request Processing for over 2 hours lost its
-    worker; mark it Failed so the user is not left waiting forever."""
+    worker; mark it Failed so the user is not left waiting forever.
+    Design and Document Requests share the status machine, so both are
+    swept."""
     cutoff = add_to_date(now_datetime(), hours=-STUCK_PROCESSING_HOURS)
-    stuck = frappe.get_all(
-        "Design Request",
-        filters={"status": "Processing", "modified": ("<", cutoff)},
-        pluck="name",
-    )
-    for name in stuck:
-        frappe.db.set_value("Design Request", name,
-                            {"status": "Failed", "error_message": "worker timeout"})
-    if stuck:
+    changed = False
+    for doctype in ("Design Request", "Document Request"):
+        stuck = frappe.get_all(
+            doctype,
+            filters={"status": "Processing", "modified": ("<", cutoff)},
+            pluck="name",
+        )
+        for name in stuck:
+            frappe.db.set_value(
+                doctype, name,
+                {"status": "Failed", "error_message": "worker timeout"})
+        changed = changed or bool(stuck)
+    if changed:
         frappe.db.commit()
 
 
 def sweep_queue():
     """Re-enqueue requests stuck in Queued (e.g. enqueue lost to a
     worker restart). Hourly; only touches requests idle > 15 minutes."""
-    from . import pipeline
+    from . import documents_pipeline, pipeline
 
     cutoff = add_to_date(now_datetime(), minutes=-QUEUE_SWEEP_MINUTES)
-    queued = frappe.get_all(
-        "Design Request",
-        filters={"status": "Queued", "modified": ("<", cutoff)},
-        pluck="name",
-        limit_page_length=100,
+    targets = (
+        ("Design Request", pipeline.process_design_request,
+         "design_request"),
+        ("Document Request", documents_pipeline.process_document_request,
+         "document_request"),
     )
-    for name in queued:
-        frappe.enqueue(pipeline.process_design_request, queue="long",
-                       name=name, job_name=f"design_request:{name}")
+    for doctype, fn, prefix in targets:
+        queued = frappe.get_all(
+            doctype,
+            filters={"status": "Queued", "modified": ("<", cutoff)},
+            pluck="name",
+            limit_page_length=100,
+        )
+        for name in queued:
+            frappe.enqueue(fn, queue="long",
+                           name=name, job_name=f"{prefix}:{name}")

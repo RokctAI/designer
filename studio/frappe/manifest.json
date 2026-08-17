@@ -1,8 +1,9 @@
 {
   "name": "studio",
-  "description": "Agency operations layer for agency-as-a-service: brand design systems, design requests, compliance candidates, client approval links, campaign fan-out and print-vendor handoff, built on the designer-compliance engine",
+  "description": "Studio operations layer for two personas in one company: designers/agencies (brand design systems, design requests, compliance candidates, approvals, campaign fan-out, print handoff on the designer-compliance engine) and business executives (StartupOS document suites, pitch decks, financial models and design briefs on the startupos engine)",
   "dependencies": [
-    "designer-compliance"
+    "designer-compliance",
+    "startupos @ git+https://github.com/RokctAI/The-Rokct-Protocol@564536bade5c154f817b09593fda6cfda8d60012#subdirectory=core/utils/startup_os"
   ],
   "hooks": {
     "whitelisted_methods": {
@@ -24,9 +25,14 @@
       "{app_name}.api.design_campaign.start_campaign": "{app_name}.studio.api.design_campaign.start_campaign",
       "{app_name}.api.design_campaign.get_campaign_status": "{app_name}.studio.api.design_campaign.get_campaign_status",
       "{app_name}.api.design_campaign.list_campaigns": "{app_name}.studio.api.design_campaign.list_campaigns",
+      "{app_name}.api.design_campaign.create_campaign_from_briefs": "{app_name}.studio.api.design_campaign.create_campaign_from_briefs",
       "{app_name}.api.design_approval.create_approval_link": "{app_name}.studio.api.design_approval.create_approval_link",
       "{app_name}.api.design_approval.get_review": "{app_name}.studio.api.design_approval.get_review",
-      "{app_name}.api.design_approval.submit_review": "{app_name}.studio.api.design_approval.submit_review"
+      "{app_name}.api.design_approval.submit_review": "{app_name}.studio.api.design_approval.submit_review",
+      "{app_name}.api.document_request.create_document_request": "{app_name}.studio.api.document_request.create_document_request",
+      "{app_name}.api.document_request.queue_document_request": "{app_name}.studio.api.document_request.queue_document_request",
+      "{app_name}.api.document_request.get_document_status": "{app_name}.studio.api.document_request.get_document_status",
+      "{app_name}.api.document_request.list_document_requests": "{app_name}.studio.api.document_request.list_document_requests"
     },
     "fixtures": [
       {
@@ -47,7 +53,9 @@
               "Design Campaign Format",
               "Generation Provider",
               "Design Print Job",
-              "Design Studio Settings"
+              "Design Studio Settings",
+              "Document Request",
+              "Document Request Output"
             ]
           ]
         ]
