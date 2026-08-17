@@ -321,4 +321,4 @@ that feeds the StartupOS deck generator — pipeline in
 
 ## Agency operations layer
 
-`design_studio/` is a Frappe app fragment (agency-as-a-service shell around this engine): see [design_studio/README.md](design_studio/README.md).
+`studio/` is a Frappe app fragment (agency-as-a-service shell around this engine): see [studio/README.md](studio/README.md).

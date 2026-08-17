@@ -20,7 +20,7 @@
 
 # Copyright (c) 2026 ROKCT INTELLIGENCE (PTY) LTD
 # For license information, please see license.txt
-"""Scheduled jobs for design_studio (wired via manifest scheduler_events).
+"""Scheduled jobs for the studio fragment (wired via manifest scheduler_events).
 
 - daily: raw-file retention cleanup (keep_raw_days) + crash recovery
   for requests stuck in Processing.
@@ -57,7 +57,7 @@ def cleanup_raw_files():
             frappe.db.set_value("Design Candidate", cand.name, "raw_image", None)
         except Exception:
             frappe.log_error(frappe.get_traceback(),
-                             f"design_studio raw cleanup failed: {cand.name}")
+                             f"studio raw cleanup failed: {cand.name}")
     frappe.db.commit()
 
 

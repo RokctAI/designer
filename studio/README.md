@@ -1,4 +1,4 @@
-# design_studio — Frappe app fragment
+# studio — Frappe app fragment
 
 The agency operations layer for an agency-as-a-service product built on
 this repository's `designer-compliance` engine. The engine (repo root)
@@ -21,21 +21,21 @@ a composer that assembles a custom app from fragments (same convention
 as the fragments in `rokctai/agent`, e.g. `subscriptions/frappe/`).
 
 ```
-design_studio/
+studio/
     frappe/
         manifest.json      # name, description, pip dependencies, hooks
         doctype/<snake>/   # <snake>.json + <snake>.py + __init__.py,
                            #   "module": "{module_name}" placeholder
-        src/               # implementation; copied to {app_name}/design_studio/
+        src/               # implementation; copied to {app_name}/studio/
     tests/                 # pure-logic tests, run with the repo's pytest suite
 ```
 
 - `manifest.json` hooks use the literal `{app_name}` placeholder. A
   whitelisted method maps a public dotted path to its implementation:
   `"{app_name}.api.design_request.create_design_request":
-  "{app_name}.design_studio.api.design_request.create_design_request"`
+  "{app_name}.studio.api.design_request.create_design_request"`
   (the `src/` directory is dropped at composition — `src/api/x.py`
-  becomes `{app_name}/design_studio/api/x.py`).
+  becomes `{app_name}/studio/api/x.py`).
 - Cross-module imports inside `src/` are relative for exactly that
   reason; background jobs are enqueued by function reference, never by
   dotted string.
@@ -100,7 +100,7 @@ queue sweep.
 
 ## Tests
 
-`design_studio/tests/` runs with the repo suite (`python3 -m pytest`
+`studio/tests/` runs with the repo suite (`python3 -m pytest`
 from the repo root). Frappe is not installed here, so a stub is
 injected via `sys.modules`; pure logic (engine-dict round-trip, token
 generation/expiry, score gating and the status machine, campaign

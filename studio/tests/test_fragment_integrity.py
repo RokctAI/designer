@@ -52,24 +52,24 @@ GUEST_METHODS = {"get_review", "submit_review"}
 
 @pytest.mark.parametrize("module", MODULES)
 def test_module_imports_without_frappe_installed(module):
-    importlib.import_module(f"design_studio_src.{module}")
+    importlib.import_module(f"studio_src.{module}")
 
 
 def test_manifest_shape():
-    assert MANIFEST["name"] == "design_studio"
+    assert MANIFEST["name"] == "studio"
     assert MANIFEST["dependencies"] == ["designer-compliance"]
     hooks = MANIFEST["hooks"]
     assert set(hooks) >= {"whitelisted_methods", "fixtures", "scheduler_events"}
 
 
 def _resolve(dotted_impl_path):
-    """'{app_name}.design_studio.api.x.y' -> attribute y of module
-    design_studio_src.api.x (the composed-layout equivalent)."""
-    prefix = "{app_name}.design_studio."
+    """'{app_name}.studio.api.x.y' -> attribute y of module
+    studio_src.api.x (the composed-layout equivalent)."""
+    prefix = "{app_name}.studio."
     assert dotted_impl_path.startswith(prefix), dotted_impl_path
     rest = dotted_impl_path[len(prefix):]
     module_path, func_name = rest.rsplit(".", 1)
-    module = importlib.import_module(f"design_studio_src.{module_path}")
+    module = importlib.import_module(f"studio_src.{module_path}")
     return getattr(module, func_name), func_name
 
 
@@ -187,7 +187,7 @@ def test_key_spec_fields_present():
 
 
 def test_provider_registry():
-    from design_studio_src.providers import ProviderError, get_provider
+    from studio_src.providers import ProviderError, get_provider
 
     class Doc:
         style_suffix = "flat vector"
@@ -211,7 +211,7 @@ def test_provider_registry():
 
 
 def test_provider_style_suffix_is_appended():
-    from design_studio_src.providers.base import BaseProvider
+    from studio_src.providers.base import BaseProvider
 
     class Doc:
         provider_type = "mock"
@@ -228,7 +228,7 @@ def test_mock_provider_output_survives_the_real_engine():
     import tempfile
     from pathlib import Path as P
 
-    from design_studio_src.providers.mock import MockProvider
+    from studio_src.providers.mock import MockProvider
 
     class Doc:
         provider_type = "mock"

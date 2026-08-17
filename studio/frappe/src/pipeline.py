@@ -20,7 +20,7 @@
 
 # Copyright (c) 2026 ROKCT INTELLIGENCE (PTY) LTD
 # For license information, please see license.txt
-"""Background pipeline for design_studio (SAAS_SPEC section 5).
+"""Background pipeline for the studio fragment (SAAS_SPEC section 5).
 
 Runs on the ``long`` queue. For source_mode "Uploaded Artwork" (the
 primary path today) the pipeline runs engine comply/score on the files
@@ -161,7 +161,7 @@ def process_design_request(name: str):
             produced = _process_generated(req, system_dict, n_colors, max_dim)
     except Exception as exc:
         frappe.log_error(frappe.get_traceback(),
-                         f"design_studio pipeline failed: {name}")
+                         f"studio pipeline failed: {name}")
         _fail(req, str(exc))
         return
 
@@ -195,7 +195,7 @@ def _process_uploaded(req, system_dict: dict, n_colors: int, max_dim: int) -> in
                 format=req.format or None)
         except engine_bridge.EngineError as exc:
             # ComplexityError and friends: mark and move on, never fatal.
-            frappe.log_error(str(exc), f"design_studio comply failed: {req.name}")
+            frappe.log_error(str(exc), f"studio comply failed: {req.name}")
             _publish_progress(req, slot, 1, None)
             continue
         _create_candidate(req, slot, 1, result, raw_file_url=f.file_url)
@@ -252,7 +252,7 @@ def _process_generated(req, system_dict: dict, n_colors: int, max_dim: int) -> i
             except engine_bridge.EngineError as exc:
                 # Photographic/complex output: reinforce flat style once.
                 frappe.log_error(str(exc),
-                                 f"design_studio comply failed: {req.name}")
+                                 f"studio comply failed: {req.name}")
                 prompt = base_prompt + "\nStrictly flat vector style, solid colors only."
                 continue
             finally:
@@ -313,7 +313,7 @@ def process_campaign(name: str):
         try:
             fmt_size = engine_bridge.format_size(row.format)
         except engine_bridge.EngineError as exc:
-            frappe.log_error(str(exc), f"design_studio campaign: {name}")
+            frappe.log_error(str(exc), f"studio campaign: {name}")
             continue
         action = campaign_lib.fanout_action(
             master_size[0], master_size[1], fmt_size[0], fmt_size[1],
@@ -331,7 +331,7 @@ def process_campaign(name: str):
             result = engine_bridge.comply_svg_text(
                 master_svg, system_dict, format=row.format)
         except engine_bridge.EngineError as exc:
-            frappe.log_error(str(exc), f"design_studio campaign: {name}")
+            frappe.log_error(str(exc), f"studio campaign: {name}")
             continue
         cand = _create_candidate(master_req, 0, 1, result,
                                  revision_of=master_cand.name)

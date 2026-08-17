@@ -21,7 +21,7 @@ several DocTypes and API methods defined here.
 
 ## 1. Placement and dependencies
 
-- Built as a **module named `design_studio`** inside an existing custom
+- Built as a **module named `studio` (formerly `design_studio`)** inside an existing custom
   Frappe app (Frappe v15). Nothing in this spec requires its own app.
 - The engine is installed as a pip dependency of the bench:
   `pip install git+https://github.com/RokctAI/designer.git`
@@ -62,7 +62,7 @@ render_pdf(doc, "/path/ad.pdf", dpi=300, cmyk=True)  # press delivery
 Module layout inside the app:
 
 ```
-your_app/design_studio/
+your_app/studio/
     __init__.py
     api.py               # whitelisted REST methods (section 4)
     prompt_builder.py    # compose generation prompts from the design system

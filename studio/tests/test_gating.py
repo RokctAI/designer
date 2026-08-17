@@ -20,7 +20,7 @@
 
 """Score gating, best-attempt selection and the request status machine."""
 
-from design_studio_src.lib import gating
+from studio_src.lib import gating
 
 
 def test_status_machine_forward_only():
