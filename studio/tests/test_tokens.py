@@ -22,7 +22,7 @@
 
 from datetime import datetime, timedelta
 
-from design_studio_src.lib import tokens as lib
+from studio_src.lib import tokens as lib
 
 
 def test_tokens_are_random_urlsafe_and_long():

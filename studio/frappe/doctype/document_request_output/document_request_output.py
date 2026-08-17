@@ -18,8 +18,11 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""Pure logic for the design_studio fragment.
+# Copyright (c) 2026 ROKCT INTELLIGENCE (PTY) LTD
+# For license information, please see license.txt
 
-Nothing in this package imports frappe (or anything else with side
-effects), so every module here is unit-testable without a bench.
-"""
+from frappe.model.document import Document
+
+
+class DocumentRequestOutput(Document):
+    pass

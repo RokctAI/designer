@@ -1,12 +1,23 @@
-# design_studio — Frappe app fragment
+# studio — Frappe app fragment
 
-The agency operations layer for an agency-as-a-service product built on
-this repository's `designer-compliance` engine. The engine (repo root)
-does the heavy lifting — vectorization, design-system enforcement,
-scoring, print-grade rendering. This fragment is the Frappe shell
-around it: brand systems per client, design requests, compliance-scored
-candidates, client approval links, campaign fan-out across formats, and
-print-vendor handoff.
+The operations layer for one company where **two personas work
+together**, each on its own engine:
+
+- **Designers/agencies** use the design features, built on this
+  repository's `designer-compliance` engine (vectorization,
+  design-system enforcement, scoring, print-grade rendering): brand
+  systems per client, design requests, compliance-scored candidates,
+  client approval links, campaign fan-out across formats, and
+  print-vendor handoff.
+- **Business executives** use the StartupOS features, built on the
+  pip-installable `startupos` engine (RokctAI/The-Rokct-Protocol,
+  `core/utils/startup_os`): answer one `questions.md`, compile the
+  business-plan document suite, investor pitch deck `.pptx` and
+  financial model `.xlsx`, and export machine-readable design briefs.
+
+The handoff between them is `create_campaign_from_briefs`: the
+executive's StartupOS brief JSONs become a Design Campaign the
+designers execute.
 
 Specs implemented: `docs/SAAS_SPEC.md` (DocTypes, API, pipeline),
 `docs/FRONTEND_SPEC.md` (candidate revisions, `save_candidate_edit`),
@@ -21,26 +32,32 @@ a composer that assembles a custom app from fragments (same convention
 as the fragments in `rokctai/agent`, e.g. `subscriptions/frappe/`).
 
 ```
-design_studio/
+studio/
     frappe/
         manifest.json      # name, description, pip dependencies, hooks
         doctype/<snake>/   # <snake>.json + <snake>.py + __init__.py,
                            #   "module": "{module_name}" placeholder
-        src/               # implementation; copied to {app_name}/design_studio/
+        src/               # implementation; copied to {app_name}/studio/
     tests/                 # pure-logic tests, run with the repo's pytest suite
 ```
 
 - `manifest.json` hooks use the literal `{app_name}` placeholder. A
   whitelisted method maps a public dotted path to its implementation:
   `"{app_name}.api.design_request.create_design_request":
-  "{app_name}.design_studio.api.design_request.create_design_request"`
+  "{app_name}.studio.api.design_request.create_design_request"`
   (the `src/` directory is dropped at composition — `src/api/x.py`
-  becomes `{app_name}/design_studio/api/x.py`).
+  becomes `{app_name}/studio/api/x.py`).
 - Cross-module imports inside `src/` are relative for exactly that
   reason; background jobs are enqueued by function reference, never by
   dotted string.
 - `dependencies` lists pip packages the composed bench must install:
-  `designer-compliance` (this repo).
+  `designer-compliance` (this repo) and `startupos`, git-pinned to a
+  RokctAI/The-Rokct-Protocol SHA (`#subdirectory=core/utils/startup_os`)
+  until it is published on PyPI. StartupOS **templates do not ship in
+  that wheel** — the composer must also place a checkout of the
+  protocol repo's `core/skills/.rok/startup_os/templates/` on the bench
+  and pass its path to `startupos_bridge.bootstrap_workspace`; the
+  bridge never fetches over the network at request time.
 - Every DocType is exported via `fixtures`; scheduler jobs are wired in
   `scheduler_events`.
 
@@ -59,6 +76,8 @@ design_studio/
 | Design Campaign Format (child) | Target format + resolved action + produced candidate/request. |
 | **Generation Provider** | `upload` and `mock` are implemented; `openai` / `stability` / `custom_http` are defined with clearly-marked NotImplementedError stubs. |
 | **Design Print Job** | Print-vendor handoff: deliverable candidate, vendor, final size / sides / material-finish, press-ready CMYK PDF, Draft/Sent/Proof Approved/In Production/Delivered. Billing hooks only — money lives in the host app. |
+| **Document Request** | The executive persona's job: StartupOS instance name, `document_scope` (Full Suite / Plan Chapters / Pitch Deck / Financial Model / Briefs), attached `questions.md` (or a workspace that already holds it), compliance folder path, `render_binaries`. Same status machine as Design Request. The engine's warnings and every unanswered question land on the request verbatim. |
+| Document Request Output (child) | One produced file: path relative to the instance's `output/` + kind (document/deck/model/brief). |
 | **Design Studio Settings** (Single) | Defaults (provider, min score, attempts, candidates, colors, max dim), `keep_raw_days` retention, campaign regen threshold, approval-link expiry. |
 
 ## Design System from 2-3 seed colours
@@ -91,16 +110,31 @@ fails with a clear message instead of a stack trace.
   decision, comment)` — token + expiry validated, SVG preview returned
   inline, internal document names never exposed to guests.
 
-Background pipeline (`src/pipeline.py`): `process_design_request`
+- Documents (executive persona): `create_document_request`,
+  `queue_document_request`, `get_document_status`,
+  `list_document_requests`.
+- Exec→designer handoff: `create_campaign_from_briefs(briefs, ...)` —
+  StartupOS expo-schema brief JSONs become one Design Campaign
+  (`poster` → `a1-poster`, `pullup_banner` → `pullup-banner`, `flyer` →
+  `a4-poster`, the engine's own "A4 portrait poster/flyer" canvas);
+  unknown asset types are skipped with an honest note, never guessed,
+  and the executive's copy is quoted verbatim in the campaign brief.
+
+Background pipelines: `src/pipeline.py` — `process_design_request`
 (uploaded-artwork comply loop today; provider generation loop with
 score gating and feedback-augmented regeneration for `mock`),
-`process_campaign` (derive-vs-regenerate fan-out). Scheduler: daily
-raw-file retention (`keep_raw_days`) and stuck-request recovery, hourly
-queue sweep.
+`process_campaign` (derive-vs-regenerate fan-out); and
+`src/documents_pipeline.py` — `process_document_request` drives the
+StartupOS engine through `src/startupos_bridge.py` (the one-file seam
+mirroring `src/engine_bridge.py`: provision/parse `questions.md`,
+compile the suite, export briefs, bootstrap a workspace from a local
+template checkout). Scheduler: daily raw-file retention
+(`keep_raw_days`) and stuck-request recovery, hourly queue sweep —
+both request doctypes.
 
 ## Tests
 
-`design_studio/tests/` runs with the repo suite (`python3 -m pytest`
+`studio/tests/` runs with the repo suite (`python3 -m pytest`
 from the repo root). Frappe is not installed here, so a stub is
 injected via `sys.modules`; pure logic (engine-dict round-trip, token
 generation/expiry, score gating and the status machine, campaign
@@ -128,3 +162,8 @@ correctly-decorated function.
 - Realtime progress events are emitted (`design_request_progress`) but
   no frontend consumes them in this repo — the Next.js studio is a
   separate deliverable (FRONTEND_SPEC).
+- **StartupOS templates on the bench**: the pip wheel ships the engine
+  only; syncing `core/skills/.rok/startup_os/templates/` to the
+  workspace is the composer's job (see `bootstrap_workspace`).
+- **No A5 flyer format** in the engine catalog yet — flyer briefs land
+  on `a4-poster` until an `a5-flyer` format exists.

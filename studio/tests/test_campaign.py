@@ -22,7 +22,7 @@
 
 import pytest
 
-from design_studio_src.lib import campaign as lib
+from studio_src.lib import campaign as lib
 
 
 def test_same_aspect_is_zero_waste():

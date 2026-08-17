@@ -20,7 +20,7 @@
 
 # Copyright (c) 2026 ROKCT INTELLIGENCE (PTY) LTD
 # For license information, please see license.txt
-"""Shared helpers for the design_studio API modules. Not whitelisted."""
+"""Shared helpers for the studio API modules. Not whitelisted."""
 
 from __future__ import annotations
 

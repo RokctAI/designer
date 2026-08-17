@@ -22,7 +22,7 @@
 
 import pytest
 
-from design_studio_src.lib import engine_dict as lib
+from studio_src.lib import engine_dict as lib
 
 
 def sample_doc():

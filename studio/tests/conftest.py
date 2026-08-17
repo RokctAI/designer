@@ -18,13 +18,13 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""Test harness for the design_studio fragment.
+"""Test harness for the studio fragment.
 
 Frappe is not installed (and cannot be) in this repo, so a minimal
 ``frappe`` stub is injected into sys.modules before any fragment module
 is imported. The fragment's ``frappe/src`` tree is registered as the
-importable package ``design_studio_src`` — the same shape it has after
-the composer copies it to ``{app_name}/design_studio/``.
+importable package ``studio_src`` — the same shape it has after
+the composer copies it to ``{app_name}/studio/``.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 TESTS_DIR = Path(__file__).resolve().parent
-FRAGMENT_DIR = TESTS_DIR.parent            # design_studio/
+FRAGMENT_DIR = TESTS_DIR.parent            # studio/
 REPO_ROOT = FRAGMENT_DIR.parent            # repo root (has designer/)
 SRC_DIR = FRAGMENT_DIR / "frappe" / "src"
 
@@ -46,11 +46,11 @@ if str(REPO_ROOT) not in sys.path:
 
 
 def _install_frappe_stub():
-    if getattr(sys.modules.get("frappe"), "_design_studio_stub", False):
+    if getattr(sys.modules.get("frappe"), "_studio_stub", False):
         return sys.modules["frappe"]
 
     frappe = types.ModuleType("frappe")
-    frappe._design_studio_stub = True
+    frappe._studio_stub = True
 
     def whitelist(allow_guest=False, **_kw):
         def deco(fn):
@@ -113,7 +113,7 @@ def _install_frappe_stub():
 
 
 def _register_src_package():
-    name = "design_studio_src"
+    name = "studio_src"
     if name in sys.modules:
         return sys.modules[name]
     spec = importlib.util.spec_from_file_location(

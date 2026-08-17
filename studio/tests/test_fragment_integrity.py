@@ -33,11 +33,12 @@ MANIFEST = json.loads((FRAGMENT / "manifest.json").read_text())
 
 MODULES = [
     "lib.engine_dict", "lib.tokens", "lib.gating", "lib.campaign",
-    "lib.feedback",
-    "engine_bridge", "pipeline", "tasks",
+    "lib.feedback", "lib.documents", "lib.briefs",
+    "engine_bridge", "startupos_bridge", "pipeline", "documents_pipeline",
+    "tasks",
     "providers", "providers.base", "providers.mock", "providers.stubs",
     "api._common", "api.design_request", "api.design_system",
-    "api.design_campaign", "api.design_approval",
+    "api.design_campaign", "api.design_approval", "api.document_request",
 ]
 
 EXPECTED_DOCTYPES = [
@@ -45,6 +46,7 @@ EXPECTED_DOCTYPES = [
     "Design Request", "Design Candidate", "Design Candidate Revision",
     "Design Approval", "Design Campaign", "Design Campaign Format",
     "Generation Provider", "Design Print Job", "Design Studio Settings",
+    "Document Request", "Document Request Output",
 ]
 
 GUEST_METHODS = {"get_review", "submit_review"}
@@ -52,24 +54,31 @@ GUEST_METHODS = {"get_review", "submit_review"}
 
 @pytest.mark.parametrize("module", MODULES)
 def test_module_imports_without_frappe_installed(module):
-    importlib.import_module(f"design_studio_src.{module}")
+    importlib.import_module(f"studio_src.{module}")
 
 
 def test_manifest_shape():
-    assert MANIFEST["name"] == "design_studio"
-    assert MANIFEST["dependencies"] == ["designer-compliance"]
+    assert MANIFEST["name"] == "studio"
+    assert MANIFEST["dependencies"][0] == "designer-compliance"
+    startupos_dep = MANIFEST["dependencies"][1]
+    assert startupos_dep.startswith("startupos @ git+https://github.com/"
+                                    "RokctAI/The-Rokct-Protocol@")
+    assert startupos_dep.endswith("#subdirectory=core/utils/startup_os")
+    # Git-pinned (40-hex SHA) until startupos is on PyPI.
+    sha = startupos_dep.split("@")[2].split("#")[0]
+    assert len(sha) == 40 and all(c in "0123456789abcdef" for c in sha)
     hooks = MANIFEST["hooks"]
     assert set(hooks) >= {"whitelisted_methods", "fixtures", "scheduler_events"}
 
 
 def _resolve(dotted_impl_path):
-    """'{app_name}.design_studio.api.x.y' -> attribute y of module
-    design_studio_src.api.x (the composed-layout equivalent)."""
-    prefix = "{app_name}.design_studio."
+    """'{app_name}.studio.api.x.y' -> attribute y of module
+    studio_src.api.x (the composed-layout equivalent)."""
+    prefix = "{app_name}.studio."
     assert dotted_impl_path.startswith(prefix), dotted_impl_path
     rest = dotted_impl_path[len(prefix):]
     module_path, func_name = rest.rsplit(".", 1)
-    module = importlib.import_module(f"design_studio_src.{module_path}")
+    module = importlib.import_module(f"studio_src.{module_path}")
     return getattr(module, func_name), func_name
 
 
@@ -131,7 +140,7 @@ def test_doctype_folders_follow_convention():
 
 def test_doctype_permissions_and_flags():
     child_tables = {"Design Color Token", "Design Font",
-                    "Design Campaign Format"}
+                    "Design Campaign Format", "Document Request Output"}
     for _, data in _doctype_jsons():
         if data["name"] in child_tables:
             assert data.get("istable") == 1
@@ -185,9 +194,40 @@ def test_key_spec_fields_present():
     settings = fields["Design Studio Settings"]
     assert "keep_raw_days" in settings
 
+    docreq = fields["Document Request"]
+    assert docreq["business_name"]["reqd"] == 1
+    assert docreq["document_scope"]["options"].split("\n") == [
+        "Full Suite", "Plan Chapters", "Pitch Deck", "Financial Model",
+        "Briefs"]
+    assert docreq["status"]["options"] == req["status"]["options"], \
+        "Document Request must share Design Request's status machine"
+    assert docreq["outputs"]["options"] == "Document Request Output"
+    assert {"questions_file", "workspace_root", "compliance_root",
+            "render_binaries", "warnings", "completeness"} <= set(docreq)
+
+
+def test_no_lingering_design_studio_references():
+    """The fragment renamed to studio/ — the old module identity must
+    not survive anywhere in the tree (composer hooks would break)."""
+    old = "design" + "_studio"
+    fragment_root = Path(__file__).resolve().parent.parent
+    offenders = []
+    for path in sorted(fragment_root.rglob("*")):
+        if path.suffix not in (".py", ".json", ".md"):
+            continue
+        if "__pycache__" in path.parts or path.name == Path(__file__).name:
+            continue
+        text = path.read_text(encoding="utf-8")
+        # The Design Studio Settings doctype keeps its name, so its
+        # snake_case folder/file identity legitimately remains.
+        text = text.replace(old + "_settings", "")
+        if old in text:
+            offenders.append(str(path.relative_to(fragment_root)))
+    assert not offenders, offenders
+
 
 def test_provider_registry():
-    from design_studio_src.providers import ProviderError, get_provider
+    from studio_src.providers import ProviderError, get_provider
 
     class Doc:
         style_suffix = "flat vector"
@@ -211,7 +251,7 @@ def test_provider_registry():
 
 
 def test_provider_style_suffix_is_appended():
-    from design_studio_src.providers.base import BaseProvider
+    from studio_src.providers.base import BaseProvider
 
     class Doc:
         provider_type = "mock"
@@ -228,7 +268,7 @@ def test_mock_provider_output_survives_the_real_engine():
     import tempfile
     from pathlib import Path as P
 
-    from design_studio_src.providers.mock import MockProvider
+    from studio_src.providers.mock import MockProvider
 
     class Doc:
         provider_type = "mock"

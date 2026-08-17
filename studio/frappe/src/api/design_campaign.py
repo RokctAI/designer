@@ -29,6 +29,7 @@ import json
 import frappe
 
 from .. import engine_bridge, pipeline
+from ..lib import briefs as briefs_lib
 from ._common import candidate_rows, require, resolve_design_system
 
 
@@ -64,6 +65,57 @@ def create_campaign(formats, title=None, brief="", design_system=None,
         frappe.enqueue(pipeline.process_campaign, queue="long",
                        name=doc.name, job_name=f"design_campaign:{doc.name}")
     return {"name": doc.name}
+
+
+@frappe.whitelist()
+def create_campaign_from_briefs(briefs, title=None, design_system=None,
+                                customer=None, master_request=None):
+    """The exec -> designer handoff: StartupOS-exported brief JSONs
+    (expo schema) become one Design Campaign with a format row per
+    known asset_type (poster -> a1-poster, pullup_banner ->
+    pullup-banner, flyer -> a4-poster). Unknown asset types are skipped
+    and reported, never guessed. ``briefs`` is a JSON list of brief
+    payloads (or one payload dict). Returns {"name", "formats",
+    "skipped"}."""
+    require("Design Campaign", "create")
+    if isinstance(briefs, str):
+        briefs = json.loads(briefs)
+    if isinstance(briefs, dict):
+        briefs = [briefs]
+    if not briefs:
+        frappe.throw("At least one brief payload is required")
+
+    plan = briefs_lib.plan_campaign(briefs)
+    if not plan["formats"]:
+        frappe.throw("No brief mapped to an engine format: "
+                     + "; ".join(plan["skipped"]))
+    for row in plan["formats"]:
+        engine_bridge.validate_format(row["format"])
+
+    brief_text = plan["brief_text"]
+    if plan["skipped"]:
+        brief_text += "\n" + "\n".join(
+            f"[skipped] {note}" for note in plan["skipped"])
+
+    doc = frappe.get_doc({
+        "doctype": "Design Campaign",
+        "title": title or (plan["formats"][0]["headline"] or "")[:60] or None,
+        "brief": brief_text,
+        "customer": customer,
+        "design_system": resolve_design_system(design_system, customer),
+        "master_request": master_request,
+        "formats": [{"format": row["format"]} for row in plan["formats"]],
+        "status": "Draft",
+    })
+    doc.insert()
+
+    if master_request and frappe.db.exists(
+            "Design Candidate", {"request": master_request}):
+        frappe.enqueue(pipeline.process_campaign, queue="long",
+                       name=doc.name, job_name=f"design_campaign:{doc.name}")
+    return {"name": doc.name,
+            "formats": [row["format"] for row in plan["formats"]],
+            "skipped": plan["skipped"]}
 
 
 @frappe.whitelist()

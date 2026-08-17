@@ -22,7 +22,7 @@
 
 import json
 
-from design_studio_src.lib.feedback import build_feedback
+from studio_src.lib.feedback import build_feedback
 
 SYSTEM = {
     "color": {"tokens": {

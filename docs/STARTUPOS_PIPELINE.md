@@ -39,6 +39,9 @@ Supacharge kit, `docs/SUPACHARGE_PIPELINE.md`).
 | Founder questionnaire → seed colours + logo upload | StartupOS | bridge, in review |
 | Calling designer and writing outputs into `brand/` | StartupOS | bridge, in review |
 | Embedding `brand/` assets into the 12-slide `.pptx` | StartupOS | bridge, in review |
+| Fragment-side StartupOS seam (`studio/frappe/src/startupos_bridge.py`: compile suite, export briefs, provision `questions.md`) | this repo (studio fragment) | exists |
+| Document Request pipeline (exec compiles the suite from Frappe) | this repo (studio fragment) | exists |
+| Brief JSONs → Design Campaign (`create_campaign_from_briefs`) | this repo (studio fragment) | exists |
 | Image-model heroes/backgrounds for slides | image model | out of designer's scope; designer audits/complies the output |
 
 ## Design system
