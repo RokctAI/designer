@@ -314,6 +314,10 @@ designer brandbook --system demo-out/system.yaml \
 Walkthrough in [docs/AGENCY_WORKFLOW.md](docs/AGENCY_WORKFLOW.md); the
 role-driven template pack is documented in
 [examples/templates/agency/README.md](examples/templates/agency/README.md).
+The same conventions drive the 16:9 pitch-deck pack
+([examples/templates/pitch-deck/README.md](examples/templates/pitch-deck/README.md))
+that feeds the StartupOS deck generator — pipeline in
+[docs/STARTUPOS_PIPELINE.md](docs/STARTUPOS_PIPELINE.md).
 
 ## Agency operations layer
 

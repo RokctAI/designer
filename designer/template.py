@@ -410,7 +410,10 @@ def _flow_items(
         offset = (rw - row_width) / 2 if in_row < cols else 0.0
         ox = rx + offset + col * (cell_w + gutter)
         oy = ry + row * (cell_h + gutter)
-        doc.shapes.extend(_render_cell(cell_template, item, ox, oy, cell_w, cell_h, system))
+        doc.shapes.extend(
+            _render_cell(cell_template, item, ox, oy, cell_w, cell_h, system,
+                         data.palette)
+        )
 
 
 def _max_fitting(width: float, height: float, min_cell: float, gutter: float) -> int:
@@ -427,11 +430,15 @@ def _render_cell(
     cw: float,
     ch: float,
     system: DesignSystem,
+    palette: list[str] = (),
 ) -> list[Shape]:
     """Instantiate the cell template into one grid position."""
     from designer.transform import affine_document
 
     cell = copy.deepcopy(cell_template)
+    # Cells restyle from the caller's palette exactly like the page's
+    # own shapes — a cell's data-token fills are not baked-in colors.
+    _apply_palette(cell, list(palette))
     scale = min(cw / cell.width, ch / cell.height) if cell.width and cell.height else 1.0
     # Center the drawn cell in its slot so partial rows and aspect
     # mismatches read as deliberate spacing, not sloppy alignment.
