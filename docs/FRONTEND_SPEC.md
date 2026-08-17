@@ -124,9 +124,15 @@ uploaded SVG as untrusted even after sanitization.
   TanStack Query for data fetching; no global state library needed.
 - Deployed on the **same origin** as Frappe behind the existing reverse
   proxy (e.g. `/studio` → Next.js, everything else → Frappe). Auth is
-  then just the Frappe session cookie; every call is
-  `POST /api/method/<app>.design_studio.api.<method>` with
-  `X-Frappe-CSRF-Token`. No CORS, no token plumbing.
+  then just the Frappe session cookie; every call goes through the
+  single gateway endpoint — `POST /api/v1/method/rokct.platform.api`
+  with a JSON body of `{"cmd": "<method>", "payload": {...}}`, where
+  `cmd` is the manifest's `whitelisted_methods` key minus its
+  `{app_name}.` prefix (e.g.
+  `{"cmd": "api.design_request.get_request_status", "payload":
+  {"request_id": "..."}}`) — sent with `X-Frappe-CSRF-Token`. Never
+  build an app-prefixed `/api/method/...` URL. No CORS, no token
+  plumbing.
   (If a separate domain is ever needed, switch to Frappe API
   key/secret pairs — but same-origin is the default.)
 - Realtime progress: poll `get_request_status` every 2s while a request
