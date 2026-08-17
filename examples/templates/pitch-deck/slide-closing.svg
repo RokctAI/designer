@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+  <!-- Pitch-deck closing/ask slide: the ask as heading, up to three
+       supporting lines, contact block and a small logo. slide-16x9. -->
+  <rect x="0" y="0" width="1920" height="1080" fill="#f3f4f6" data-token="advertiser-4"/>
+  <rect x="0" y="1016" width="1920" height="64" fill="#1a56db" data-token="advertiser-1"/>
+  <text data-slot="kicker" data-fit="shrink" data-fit-width="1600" data-fit-height="32"
+        x="160" y="176" font-size="24" font-weight="bold" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Kicker</text>
+  <rect x="160" y="200" width="96" height="8" fill="#f59e0b" data-token="advertiser-2"/>
+  <text data-slot="heading" data-fit="shrink" data-fit-width="1600" data-fit-height="88"
+        x="160" y="368" font-size="64" font-weight="bold" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Heading</text>
+  <text data-slot="point-1" data-fit="shrink" data-fit-width="1216" data-fit-height="40"
+        x="160" y="512" font-size="32" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Point 1</text>
+  <text data-slot="point-2" data-fit="shrink" data-fit-width="1216" data-fit-height="40"
+        x="160" y="600" font-size="32" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Point 2</text>
+  <text data-slot="point-3" data-fit="shrink" data-fit-width="1216" data-fit-height="40"
+        x="160" y="688" font-size="32" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Point 3</text>
+  <rect x="160" y="784" width="192" height="8" fill="#f59e0b" data-token="advertiser-2"/>
+  <text data-slot="email" data-fit="shrink" data-fit-width="1216" data-fit-height="36"
+        x="160" y="872" font-size="24" font-weight="bold" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Email</text>
+  <text data-slot="phone" data-fit="shrink" data-fit-width="1216" data-fit-height="36"
+        x="160" y="936" font-size="24" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Phone</text>
+  <image data-slot="logo" x="1600" y="816" width="160" height="160" href=""/>
+</svg>

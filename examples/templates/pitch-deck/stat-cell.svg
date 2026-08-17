@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 240" width="360" height="240">
+  <!-- One metric of a data slide: card face, accent strip, big value
+       (item.price), label (item.title), optional delta (item.badge). -->
+  <rect x="0" y="0" width="360" height="240" fill="#ffffff" data-token="advertiser-6"/>
+  <rect x="0" y="0" width="360" height="8" fill="#f59e0b" data-token="advertiser-2"/>
+  <text data-slot="price" data-fit="shrink" data-fit-width="312" data-fit-height="64"
+        x="24" y="120" font-size="48" font-weight="bold" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Value</text>
+  <text data-slot="title" data-fit="shrink" data-fit-width="312" data-fit-height="32"
+        x="24" y="168" font-size="24" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Label</text>
+  <text data-slot="badge" data-fit="shrink" data-fit-width="312" data-fit-height="28"
+        x="24" y="208" font-size="20" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Delta</text>
+</svg>

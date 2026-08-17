@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+  <!-- Pitch-deck title slide, slide-16x9 (1920x1080, screen — no bleed).
+       Palette roles: advertiser-1 primary, 2 accent, 3 ink, 4 surface,
+       5 on-primary, 6 paper. Text stays on ink over surface so the pack
+       audits clean on dark systems (supacharge) and light derived ones. -->
+  <rect x="0" y="0" width="1920" height="1080" fill="#f3f4f6" data-token="advertiser-4"/>
+  <rect x="0" y="1016" width="1920" height="64" fill="#1a56db" data-token="advertiser-1"/>
+  <image data-slot="logo" x="160" y="192" width="224" height="224" href=""/>
+  <rect x="160" y="496" width="192" height="16" fill="#f59e0b" data-token="advertiser-2"/>
+  <text data-slot="business-name" data-fit="shrink" data-fit-width="1600" data-fit-height="88"
+        x="160" y="648" font-size="64" font-weight="bold" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Business Name</text>
+  <text data-slot="tagline" data-fit="shrink" data-fit-width="1600" data-fit-height="48"
+        x="160" y="752" font-size="32" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Tagline</text>
+  <text data-slot="date" data-fit="shrink" data-fit-width="800" data-fit-height="32"
+        x="160" y="936" font-size="24" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Date</text>
+</svg>
