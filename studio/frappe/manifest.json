@@ -1,74 +1,79 @@
 {
   "name": "studio",
   "description": "Studio operations layer for two personas in one company: designers/agencies (brand design systems, design requests, compliance candidates, approvals, campaign fan-out, print handoff on the designer-compliance engine) and business executives (StartupOS document suites, pitch decks, financial models and design briefs on the startupos engine)",
-  "dependencies": [
-    "designer-compliance",
-    "startupos @ git+https://github.com/RokctAI/The-Rokct-Protocol@564536bade5c154f817b09593fda6cfda8d60012#subdirectory=core/utils/startup_os"
-  ],
-  "hooks": {
-    "whitelisted_methods": {
-      "{app_name}.api.design_request.create_design_request": "{app_name}.studio.api.design_request.create_design_request",
-      "{app_name}.api.design_request.queue_design_request": "{app_name}.studio.api.design_request.queue_design_request",
-      "{app_name}.api.design_request.get_request_status": "{app_name}.studio.api.design_request.get_request_status",
-      "{app_name}.api.design_request.list_requests": "{app_name}.studio.api.design_request.list_requests",
-      "{app_name}.api.design_request.select_candidate": "{app_name}.studio.api.design_request.select_candidate",
-      "{app_name}.api.design_request.comply_upload": "{app_name}.studio.api.design_request.comply_upload",
-      "{app_name}.api.design_request.audit_upload": "{app_name}.studio.api.design_request.audit_upload",
-      "{app_name}.api.design_request.save_candidate_edit": "{app_name}.studio.api.design_request.save_candidate_edit",
-      "{app_name}.api.design_request.render_deliverable": "{app_name}.studio.api.design_request.render_deliverable",
-      "{app_name}.api.design_system.derive_design_system": "{app_name}.studio.api.design_system.derive_design_system",
-      "{app_name}.api.design_system.list_design_systems": "{app_name}.studio.api.design_system.list_design_systems",
-      "{app_name}.api.design_system.get_design_system": "{app_name}.studio.api.design_system.get_design_system",
-      "{app_name}.api.design_system.extract_palette": "{app_name}.studio.api.design_system.extract_palette",
-      "{app_name}.api.design_system.list_formats": "{app_name}.studio.api.design_system.list_formats",
-      "{app_name}.api.design_campaign.create_campaign": "{app_name}.studio.api.design_campaign.create_campaign",
-      "{app_name}.api.design_campaign.start_campaign": "{app_name}.studio.api.design_campaign.start_campaign",
-      "{app_name}.api.design_campaign.get_campaign_status": "{app_name}.studio.api.design_campaign.get_campaign_status",
-      "{app_name}.api.design_campaign.list_campaigns": "{app_name}.studio.api.design_campaign.list_campaigns",
-      "{app_name}.api.design_campaign.create_campaign_from_briefs": "{app_name}.studio.api.design_campaign.create_campaign_from_briefs",
-      "{app_name}.api.design_approval.create_approval_link": "{app_name}.studio.api.design_approval.create_approval_link",
-      "{app_name}.api.design_approval.get_review": "{app_name}.studio.api.design_approval.get_review",
-      "{app_name}.api.design_approval.submit_review": "{app_name}.studio.api.design_approval.submit_review",
-      "{app_name}.api.document_request.create_document_request": "{app_name}.studio.api.document_request.create_document_request",
-      "{app_name}.api.document_request.queue_document_request": "{app_name}.studio.api.document_request.queue_document_request",
-      "{app_name}.api.document_request.get_document_status": "{app_name}.studio.api.document_request.get_document_status",
-      "{app_name}.api.document_request.list_document_requests": "{app_name}.studio.api.document_request.list_document_requests"
-    },
-    "fixtures": [
-      {
-        "dt": "DocType",
-        "filters": [
-          [
-            "name",
-            "in",
-            [
-              "Design System",
-              "Design Color Token",
-              "Design Font",
-              "Design Request",
-              "Design Candidate",
-              "Design Candidate Revision",
-              "Design Approval",
-              "Design Campaign",
-              "Design Campaign Format",
-              "Generation Provider",
-              "Design Print Job",
-              "Design Studio Settings",
-              "Document Request",
-              "Document Request Output"
-            ]
-          ]
-        ]
-      }
-    ],
-    "scheduler_events": {
-      "daily": [
-        "{app_name}.studio.tasks.cleanup_raw_files",
-        "{app_name}.studio.tasks.fail_stuck_requests"
+  "app_type": {
+    "tenant": {
+      "dependencies": [
+        "designer-compliance",
+        "startupos @ git+https://github.com/RokctAI/The-Rokct-Protocol@564536bade5c154f817b09593fda6cfda8d60012#subdirectory=core/utils/startup_os"
       ],
-      "hourly": [
-        "{app_name}.studio.tasks.sweep_queue"
-      ]
-    }
+      "hooks": {
+        "whitelisted_methods": {
+          "{app_name}.api.design_request.create_design_request": "{app_name}.studio.tenant.api.design_request.create_design_request",
+          "{app_name}.api.design_request.queue_design_request": "{app_name}.studio.tenant.api.design_request.queue_design_request",
+          "{app_name}.api.design_request.get_request_status": "{app_name}.studio.tenant.api.design_request.get_request_status",
+          "{app_name}.api.design_request.list_requests": "{app_name}.studio.tenant.api.design_request.list_requests",
+          "{app_name}.api.design_request.select_candidate": "{app_name}.studio.tenant.api.design_request.select_candidate",
+          "{app_name}.api.design_request.comply_upload": "{app_name}.studio.tenant.api.design_request.comply_upload",
+          "{app_name}.api.design_request.audit_upload": "{app_name}.studio.tenant.api.design_request.audit_upload",
+          "{app_name}.api.design_request.save_candidate_edit": "{app_name}.studio.tenant.api.design_request.save_candidate_edit",
+          "{app_name}.api.design_request.render_deliverable": "{app_name}.studio.tenant.api.design_request.render_deliverable",
+          "{app_name}.api.design_system.derive_design_system": "{app_name}.studio.tenant.api.design_system.derive_design_system",
+          "{app_name}.api.design_system.list_design_systems": "{app_name}.studio.tenant.api.design_system.list_design_systems",
+          "{app_name}.api.design_system.get_design_system": "{app_name}.studio.tenant.api.design_system.get_design_system",
+          "{app_name}.api.design_system.extract_palette": "{app_name}.studio.tenant.api.design_system.extract_palette",
+          "{app_name}.api.design_system.list_formats": "{app_name}.studio.tenant.api.design_system.list_formats",
+          "{app_name}.api.design_campaign.create_campaign": "{app_name}.studio.tenant.api.design_campaign.create_campaign",
+          "{app_name}.api.design_campaign.start_campaign": "{app_name}.studio.tenant.api.design_campaign.start_campaign",
+          "{app_name}.api.design_campaign.get_campaign_status": "{app_name}.studio.tenant.api.design_campaign.get_campaign_status",
+          "{app_name}.api.design_campaign.list_campaigns": "{app_name}.studio.tenant.api.design_campaign.list_campaigns",
+          "{app_name}.api.design_campaign.create_campaign_from_briefs": "{app_name}.studio.tenant.api.design_campaign.create_campaign_from_briefs",
+          "{app_name}.api.design_approval.create_approval_link": "{app_name}.studio.tenant.api.design_approval.create_approval_link",
+          "{app_name}.api.design_approval.get_review": "{app_name}.studio.tenant.api.design_approval.get_review",
+          "{app_name}.api.design_approval.submit_review": "{app_name}.studio.tenant.api.design_approval.submit_review",
+          "{app_name}.api.document_request.create_document_request": "{app_name}.studio.tenant.api.document_request.create_document_request",
+          "{app_name}.api.document_request.queue_document_request": "{app_name}.studio.tenant.api.document_request.queue_document_request",
+          "{app_name}.api.document_request.get_document_status": "{app_name}.studio.tenant.api.document_request.get_document_status",
+          "{app_name}.api.document_request.list_document_requests": "{app_name}.studio.tenant.api.document_request.list_document_requests"
+        },
+        "fixtures": [
+          {
+            "dt": "DocType",
+            "filters": [
+              [
+                "name",
+                "in",
+                [
+                  "Design System",
+                  "Design Color Token",
+                  "Design Font",
+                  "Design Request",
+                  "Design Candidate",
+                  "Design Candidate Revision",
+                  "Design Approval",
+                  "Design Campaign",
+                  "Design Campaign Format",
+                  "Generation Provider",
+                  "Design Print Job",
+                  "Design Studio Settings",
+                  "Document Request",
+                  "Document Request Output"
+                ]
+              ]
+            ]
+          }
+        ],
+        "scheduler_events": {
+          "daily": [
+            "{app_name}.studio.tenant.tasks.cleanup_raw_files",
+            "{app_name}.studio.tenant.tasks.fail_stuck_requests"
+          ],
+          "hourly": [
+            "{app_name}.studio.tenant.tasks.sweep_queue"
+          ]
+        }
+      }
+    },
+    "control": {}
   }
 }

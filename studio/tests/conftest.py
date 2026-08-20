@@ -22,9 +22,9 @@
 
 Frappe is not installed (and cannot be) in this repo, so a minimal
 ``frappe`` stub is injected into sys.modules before any fragment module
-is imported. The fragment's ``frappe/src`` tree is registered as the
-importable package ``studio_src`` — the same shape it has after
-the composer copies it to ``{app_name}/studio/``.
+is imported. The fragment's ``frappe/src/tenant`` tree is registered as
+the importable package ``studio_src`` — the same shape it has after
+the composer copies it to ``{app_name}/studio/tenant/``.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ from pathlib import Path
 TESTS_DIR = Path(__file__).resolve().parent
 FRAGMENT_DIR = TESTS_DIR.parent            # studio/
 REPO_ROOT = FRAGMENT_DIR.parent            # repo root (has designer/)
-SRC_DIR = FRAGMENT_DIR / "frappe" / "src"
+SRC_DIR = FRAGMENT_DIR / "frappe" / "src" / "tenant"
 
 # `import designer` must work no matter how pytest was invoked.
 if str(REPO_ROOT) not in sys.path:

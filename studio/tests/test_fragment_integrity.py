@@ -30,6 +30,7 @@ import pytest
 
 FRAGMENT = Path(__file__).resolve().parent.parent / "frappe"
 MANIFEST = json.loads((FRAGMENT / "manifest.json").read_text())
+TENANT_HOOKS = MANIFEST["app_type"]["tenant"]["hooks"]
 
 MODULES = [
     "lib.engine_dict", "lib.tokens", "lib.gating", "lib.campaign",
@@ -59,22 +60,28 @@ def test_module_imports_without_frappe_installed(module):
 
 def test_manifest_shape():
     assert MANIFEST["name"] == "studio"
-    assert MANIFEST["dependencies"][0] == "designer-compliance"
-    startupos_dep = MANIFEST["dependencies"][1]
+    # Both personas declared: tenant carries everything, control is the
+    # mandatory empty block that lets control-marked shells strip
+    # src/tenant/ (composer skips only *declared* persona folders).
+    assert set(MANIFEST["app_type"]) == {"tenant", "control"}
+    assert MANIFEST["app_type"]["control"] == {}
+    tenant = MANIFEST["app_type"]["tenant"]
+    assert tenant["dependencies"][0] == "designer-compliance"
+    startupos_dep = tenant["dependencies"][1]
     assert startupos_dep.startswith("startupos @ git+https://github.com/"
                                     "RokctAI/The-Rokct-Protocol@")
     assert startupos_dep.endswith("#subdirectory=core/utils/startup_os")
     # Git-pinned (40-hex SHA) until startupos is on PyPI.
     sha = startupos_dep.split("@")[2].split("#")[0]
     assert len(sha) == 40 and all(c in "0123456789abcdef" for c in sha)
-    hooks = MANIFEST["hooks"]
+    hooks = TENANT_HOOKS
     assert set(hooks) >= {"whitelisted_methods", "fixtures", "scheduler_events"}
 
 
 def _resolve(dotted_impl_path):
-    """'{app_name}.studio.api.x.y' -> attribute y of module
+    """'{app_name}.studio.tenant.api.x.y' -> attribute y of module
     studio_src.api.x (the composed-layout equivalent)."""
-    prefix = "{app_name}.studio."
+    prefix = "{app_name}.studio.tenant."
     assert dotted_impl_path.startswith(prefix), dotted_impl_path
     rest = dotted_impl_path[len(prefix):]
     module_path, func_name = rest.rsplit(".", 1)
@@ -83,7 +90,7 @@ def _resolve(dotted_impl_path):
 
 
 def test_every_whitelisted_method_resolves_and_is_whitelisted():
-    methods = MANIFEST["hooks"]["whitelisted_methods"]
+    methods = TENANT_HOOKS["whitelisted_methods"]
     assert len(methods) >= 20
     for public, impl in methods.items():
         assert public.startswith("{app_name}.api."), public
@@ -100,7 +107,7 @@ def test_every_whitelisted_method_resolves_and_is_whitelisted():
 
 
 def test_scheduler_events_resolve():
-    events = MANIFEST["hooks"]["scheduler_events"]
+    events = TENANT_HOOKS["scheduler_events"]
     assert set(events) == {"daily", "hourly"}
     assert len(events["daily"]) == 2 and len(events["hourly"]) == 1
     for paths in events.values():
@@ -110,7 +117,7 @@ def test_scheduler_events_resolve():
 
 
 def test_fixtures_cover_every_doctype():
-    fixtures = MANIFEST["hooks"]["fixtures"]
+    fixtures = TENANT_HOOKS["fixtures"]
     covered = set()
     for entry in fixtures:
         assert entry["dt"] == "DocType"
@@ -121,7 +128,7 @@ def test_fixtures_cover_every_doctype():
 
 
 def _doctype_jsons():
-    for path in sorted((FRAGMENT / "doctype").glob("*/*.json")):
+    for path in sorted((FRAGMENT / "src" / "tenant" / "doctype").glob("*/*.json")):
         yield path, json.loads(path.read_text())
 
 
