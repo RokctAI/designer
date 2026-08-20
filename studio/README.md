@@ -34,22 +34,33 @@ as the fragments in `rokctai/agent`, e.g. `subscriptions/frappe/`).
 ```
 studio/
     frappe/
-        manifest.json      # name, description, pip dependencies, hooks
-        doctype/<snake>/   # <snake>.json + <snake>.py + __init__.py,
-                           #   "module": "{module_name}" placeholder
-        src/               # implementation; copied to {app_name}/studio/
+        manifest.json      # name, description, app_type persona flavors
+        src/
+            tenant/        # implementation; composes as the subpackage
+                           #   {app_name}/studio/tenant/
+                doctype/<snake>/   # <snake>.json + <snake>.py + __init__.py,
+                                   #   "module": "{module_name}" placeholder;
+                                   #   the composer relocates doctype trees
+                                   #   back to {app_name}/studio/doctype/
     tests/                 # pure-logic tests, run with the repo's pytest suite
 ```
 
+- The whole module is the **tenant** persona: everything lives under
+  `src/tenant/` and the manifest declares
+  `"app_type": {"tenant": {...}, "control": {}}`. The empty `control`
+  block is mandatory — a persona folder is only stripped from shells of
+  the *other* persona when both personas are declared.
 - `manifest.json` hooks use the literal `{app_name}` placeholder. A
-  whitelisted method maps a public dotted path to its implementation:
+  whitelisted method maps a public dotted path (the alias key, which
+  never changes) to its implementation:
   `"{app_name}.api.design_request.create_design_request":
-  "{app_name}.studio.api.design_request.create_design_request"`
-  (the `src/` directory is dropped at composition — `src/api/x.py`
-  becomes `{app_name}/studio/api/x.py`).
-- Cross-module imports inside `src/` are relative for exactly that
-  reason; background jobs are enqueued by function reference, never by
-  dotted string.
+  "{app_name}.studio.tenant.api.design_request.create_design_request"`
+  (the `src/` directory is dropped at composition but persona folders
+  compose as subpackages — `src/tenant/api/x.py` becomes
+  `{app_name}/studio/tenant/api/x.py`).
+- Cross-module imports inside `src/tenant/` are relative for exactly
+  that reason; background jobs are enqueued by function reference,
+  never by dotted string.
 - `dependencies` lists pip packages the composed bench must install:
   `designer-compliance` (this repo) and `startupos`, git-pinned to a
   RokctAI/The-Rokct-Protocol SHA (`#subdirectory=core/utils/startup_os`)
@@ -120,13 +131,13 @@ fails with a clear message instead of a stack trace.
   unknown asset types are skipped with an honest note, never guessed,
   and the executive's copy is quoted verbatim in the campaign brief.
 
-Background pipelines: `src/pipeline.py` — `process_design_request`
+Background pipelines: `src/tenant/pipeline.py` — `process_design_request`
 (uploaded-artwork comply loop today; provider generation loop with
 score gating and feedback-augmented regeneration for `mock`),
 `process_campaign` (derive-vs-regenerate fan-out); and
-`src/documents_pipeline.py` — `process_document_request` drives the
-StartupOS engine through `src/startupos_bridge.py` (the one-file seam
-mirroring `src/engine_bridge.py`: provision/parse `questions.md`,
+`src/tenant/documents_pipeline.py` — `process_document_request` drives the
+StartupOS engine through `src/tenant/startupos_bridge.py` (the one-file seam
+mirroring `src/tenant/engine_bridge.py`: provision/parse `questions.md`,
 compile the suite, export briefs, bootstrap a workspace from a local
 template checkout). Scheduler: daily raw-file retention
 (`keep_raw_days`) and stuck-request recovery, hourly queue sweep —
@@ -138,7 +149,7 @@ both request doctypes.
 from the repo root). Frappe is not installed here, so a stub is
 injected via `sys.modules`; pure logic (engine-dict round-trip, token
 generation/expiry, score gating and the status machine, campaign
-aspect-waste planning, feedback text) lives in `frappe/src/lib/` and is
+aspect-waste planning, feedback text) lives in `frappe/src/tenant/lib/` and is
 tested directly, plus fragment-integrity tests that import every module
 against the stub and verify every manifest hook resolves to a real,
 correctly-decorated function.

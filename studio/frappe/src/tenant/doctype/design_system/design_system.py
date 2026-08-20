@@ -30,14 +30,15 @@ HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
 def _lib_engine_dict():
-    """The pure mapping lives in the fragment's lib package
-    ({app}.studio.lib.engine_dict after composition); this module
-    sits at {app}.studio.doctype.design_system.design_system, so
-    the package root is everything before '.doctype.'."""
+    """The pure mapping lives in the fragment's tenant lib package
+    ({app}.studio.tenant.lib.engine_dict after composition); the
+    composer relocates doctype trees back to the module root, so this
+    module sits at {app}.studio.doctype.design_system.design_system and
+    the module root is everything before '.doctype.'."""
     from importlib import import_module
 
     base = __name__.split(".doctype.")[0]
-    return import_module(base + ".lib.engine_dict")
+    return import_module(base + ".tenant.lib.engine_dict")
 
 
 class DesignSystem(Document):
