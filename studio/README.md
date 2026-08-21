@@ -127,9 +127,11 @@ fails with a clear message instead of a stack trace.
 - Exec→designer handoff: `create_campaign_from_briefs(briefs, ...)` —
   StartupOS expo-schema brief JSONs become one Design Campaign
   (`poster` → `a1-poster`, `pullup_banner` → `pullup-banner`, `flyer` →
-  `a4-poster`, the engine's own "A4 portrait poster/flyer" canvas);
-  unknown asset types are skipped with an honest note, never guessed,
-  and the executive's copy is quoted verbatim in the campaign brief.
+  `a4-poster`, the engine's own "A4 portrait poster/flyer" canvas, and
+  `company_profile` → `a4-poster`, laid out by the engine's
+  `examples/templates/company-profile/` pack); unknown asset types are
+  skipped with an honest note, never guessed, and the executive's copy
+  is quoted verbatim in the campaign brief.
 
 Background pipelines: `src/tenant/pipeline.py` — `process_design_request`
 (uploaded-artwork comply loop today; provider generation loop with

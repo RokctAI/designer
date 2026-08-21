@@ -317,7 +317,10 @@ role-driven template pack is documented in
 The same conventions drive the 16:9 pitch-deck pack
 ([examples/templates/pitch-deck/README.md](examples/templates/pitch-deck/README.md))
 that feeds the StartupOS deck generator — pipeline in
-[docs/STARTUPOS_PIPELINE.md](docs/STARTUPOS_PIPELINE.md).
+[docs/STARTUPOS_PIPELINE.md](docs/STARTUPOS_PIPELINE.md) — and the A4
+company-profile pack
+([examples/templates/company-profile/README.md](examples/templates/company-profile/README.md)),
+the visual target for the studio's most-requested tender returnable.
 
 ## Agency operations layer
 
