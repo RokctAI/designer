@@ -33,6 +33,18 @@ from ..lib import gating
 from ._common import (candidate_rows, file_disk_path, require,
                       resolve_design_system, system_dict_for)
 
+# Per-file cap for uploaded artwork; rejected before any engine work.
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+
+
+def _require_upload_within_cap(file_url):
+    """Reject an oversized uploaded File with a clean user message."""
+    size = frappe.db.get_value("File", {"file_url": file_url}, "file_size")
+    if size and int(size) > MAX_UPLOAD_BYTES:
+        frappe.throw(
+            f"File {file_url} is too large ({int(size) // (1024 * 1024)}MB); "
+            f"the limit is {MAX_UPLOAD_BYTES // (1024 * 1024)}MB per file")
+
 
 def _parse_list(value):
     if isinstance(value, str):
@@ -60,6 +72,10 @@ def create_design_request(prompt=None, design_system=None, format="logo",
     if source_mode == "Generated" and not (prompt or "").strip():
         frappe.throw("A prompt is required when source_mode is Generated")
 
+    urls = _parse_list(file_urls)
+    for url in urls:
+        _require_upload_within_cap(url)
+
     doc = frappe.get_doc({
         "doctype": "Design Request",
         "title": (title or (prompt or "")[:60] or None),
@@ -80,7 +96,7 @@ def create_design_request(prompt=None, design_system=None, format="logo",
     })
     doc.insert()
 
-    for url in _parse_list(file_urls):
+    for url in urls:
         fname = frappe.db.get_value("File", {"file_url": url}, "name")
         if not fname:
             frappe.throw(f"No File record for {url}")
@@ -90,7 +106,7 @@ def create_design_request(prompt=None, design_system=None, format="logo",
         fdoc.is_private = 1
         fdoc.save(ignore_permissions=True)
 
-    has_source = (source_mode == "Generated") or bool(_parse_list(file_urls))
+    has_source = (source_mode == "Generated") or bool(urls)
     if has_source:
         doc.db_set("status", "Queued")
         frappe.enqueue(pipeline.process_design_request, queue="long",
@@ -162,6 +178,7 @@ def comply_upload(file_url, design_system=None, n_colors=6, format=None):
     generation, no provider spend. Creates a Ready request with one
     candidate; returns the get_request_status shape."""
     require("Design Request", "create")
+    _require_upload_within_cap(file_url)
     system_name = resolve_design_system(design_system)
     if format:
         engine_bridge.validate_format(format)
@@ -224,6 +241,7 @@ def comply_upload(file_url, design_system=None, n_colors=6, format=None):
 def audit_upload(file_url, design_system=None, n_colors=6):
     """Read-only check of any uploaded asset (SVG or raster)."""
     require("Design Request", "create")
+    _require_upload_within_cap(file_url)
     system_name = resolve_design_system(design_system)
     settings = frappe.get_cached_doc("Design Studio Settings")
     return engine_bridge.audit_file(

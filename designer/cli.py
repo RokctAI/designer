@@ -40,6 +40,7 @@ from pathlib import Path
 from designer import __version__
 from designer.engine import ComplianceEngine
 from designer.formats import all_formats
+from designer.raster import InvalidImageError
 from designer.svg import parse_svg, save
 from designer.tokens import load_system
 from designer.vectorize import ComplexityError, VectorizeOptions
@@ -127,7 +128,7 @@ def cmd_vectorize(args: argparse.Namespace) -> int:
     engine = ComplianceEngine(load_system(args.system))
     try:
         doc = engine.load(args.input, _vector_options(args))
-    except ComplexityError as exc:
+    except (ComplexityError, InvalidImageError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     out = Path(args.output) if args.output else _default_output(args.input, ".svg")
@@ -140,7 +141,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
     engine = ComplianceEngine(load_system(args.system), format=args.format)
     try:
         doc = engine.load(args.input, _vector_options(args))
-    except ComplexityError as exc:
+    except (ComplexityError, InvalidImageError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     report = engine.audit(doc)
@@ -152,7 +153,7 @@ def cmd_comply(args: argparse.Namespace) -> int:
     engine = ComplianceEngine(load_system(args.system), format=args.format)
     try:
         doc = engine.load(args.input, _vector_options(args))
-    except ComplexityError as exc:
+    except (ComplexityError, InvalidImageError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     before = engine.audit(doc).score
@@ -268,7 +269,7 @@ def cmd_render(args: argparse.Namespace) -> int:
     for source in args.input:
         try:
             docs.append(engine.load(source, _vector_options(args)))
-        except ComplexityError as exc:
+        except (ComplexityError, InvalidImageError) as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2
     if args.comply:

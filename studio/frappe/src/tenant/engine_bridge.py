@@ -98,7 +98,7 @@ def comply_file(image_path: str, system_dict: dict, n_colors: int = 6,
         score_before = engine.audit(doc).score
         report = engine.comply(doc)
         svg_text = serialize(doc)
-    except designer.ComplexityError as exc:
+    except (designer.ComplexityError, designer.InvalidImageError) as exc:
         raise EngineError(str(exc)) from exc
     except EngineError:
         raise
@@ -125,7 +125,7 @@ def audit_file(file_path: str, system_dict: dict, n_colors: int = 6,
             VectorizeOptions(n_colors=int(n_colors), max_dim=int(max_dim)),
         )
         report = engine.audit(doc)
-    except designer.ComplexityError as exc:
+    except (designer.ComplexityError, designer.InvalidImageError) as exc:
         raise EngineError(str(exc)) from exc
     except Exception as exc:
         raise EngineError(f"Engine failed on {os.path.basename(file_path)}: {exc}") from exc

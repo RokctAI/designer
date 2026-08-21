@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
 from designer.color import RGB, delta_e
 
@@ -41,6 +41,13 @@ MERGE_DISTANCE = 0.04
 
 # Alpha below this is treated as "not part of the artwork".
 ALPHA_THRESHOLD = 128
+
+
+class InvalidImageError(ValueError):
+    """The input file is not a readable raster image (missing, empty,
+    corrupted, truncated, not an image, or absurdly large). Wraps PIL's
+    open/decode errors with a plain message naming the file; callers
+    surface the message to the user."""
 
 
 @dataclass
@@ -62,13 +69,33 @@ def load_image(path: str | Path, max_dim: int | None = 1024) -> Image.Image:
 
     Downscaling both denoises generator output and keeps pure-Python
     tracing fast; the SVG viewBox keeps everything resolution-independent.
+
+    Raises InvalidImageError for anything PIL cannot open or decode.
     """
-    img = Image.open(str(path)).convert("RGBA")
+    try:
+        img = Image.open(str(path))
+        img.load()  # force the decode now so truncated data fails here
+    except Image.DecompressionBombError as exc:
+        raise InvalidImageError(
+            f"cannot load {path}: image is too large to process safely"
+        ) from exc
+    except UnidentifiedImageError as exc:
+        raise InvalidImageError(
+            f"cannot load {path}: not a recognized image file"
+        ) from exc
+    except OSError as exc:
+        raise InvalidImageError(f"cannot load {path}: {exc}") from exc
+    # Downscale before converting to RGBA: converting first would
+    # transiently allocate 4 bytes/pixel at full size (~700MB for a
+    # 170MP input). Modes that don't resample per-pixel (palette etc.)
+    # must still convert first to stay correct.
+    if img.mode not in ("RGB", "RGBA", "L", "LA"):
+        img = img.convert("RGBA")
     if max_dim and max(img.size) > max_dim:
         scale = max_dim / max(img.size)
         new_size = (max(1, round(img.width * scale)), max(1, round(img.height * scale)))
         img = img.resize(new_size, Image.LANCZOS)
-    return img
+    return img if img.mode == "RGBA" else img.convert("RGBA")
 
 
 def quantize(img: Image.Image, n_colors: int = 6) -> QuantizedImage:
