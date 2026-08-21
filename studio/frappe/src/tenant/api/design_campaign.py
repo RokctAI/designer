@@ -73,8 +73,8 @@ def create_campaign_from_briefs(briefs, title=None, design_system=None,
     """The exec -> designer handoff: StartupOS-exported brief JSONs
     (expo schema) become one Design Campaign with a format row per
     known asset_type (poster -> a1-poster, pullup_banner ->
-    pullup-banner, flyer -> a4-poster). Unknown asset types are skipped
-    and reported, never guessed. ``briefs`` is a JSON list of brief
+    pullup-banner, flyer and company_profile -> a4-poster). Unknown
+    asset types are skipped and reported, never guessed. ``briefs`` is a JSON list of brief
     payloads (or one payload dict). Returns {"name", "formats",
     "skipped"}."""
     require("Design Campaign", "create")
