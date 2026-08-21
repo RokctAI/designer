@@ -36,6 +36,7 @@ Supacharge kit, `docs/SUPACHARGE_PIPELINE.md`).
 | Deck-ready exports (`designer render` → PNG/SVG/PDF) | this repo | exists |
 | 16:9 slide templates (`examples/templates/pitch-deck/`) | this repo | exists |
 | `slide-16x9` format preset (1920×1080, 5% margin, 18px text floor) | this repo | exists |
+| A4 company-profile templates (`examples/templates/company-profile/`, `a4-poster` preset) — the visual target for the `company_profile` tender returnable | this repo | exists |
 | Founder questionnaire → seed colours + logo upload | StartupOS | bridge, in review |
 | Calling designer and writing outputs into `brand/` | StartupOS | bridge, in review |
 | Embedding `brand/` assets into the 12-slide `.pptx` | StartupOS | bridge, in review |

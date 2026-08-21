@@ -35,11 +35,14 @@ from typing import Mapping, Sequence
 
 # StartupOS asset_type -> designer.formats name. a4-poster is the
 # engine's own "A4 portrait poster/flyer" canvas — the closest print
-# format to the A5 flyer brief until an a5-flyer format exists.
+# format to the A5 flyer brief until an a5-flyer format exists. The
+# company_profile returnable targets the same A4 portrait preset; its
+# visual layout comes from examples/templates/company-profile/.
 ASSET_TYPE_FORMATS = {
     "poster": "a1-poster",
     "pullup_banner": "pullup-banner",
     "flyer": "a4-poster",
+    "company_profile": "a4-poster",
 }
 
 

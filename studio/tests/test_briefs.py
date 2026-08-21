@@ -54,6 +54,8 @@ def test_map_brief_known_types():
     assert lib.map_brief(_brief("PB01", "pullup_banner"))["format"] == \
         "pullup-banner"
     assert lib.map_brief(_brief("FL01", "flyer"))["format"] == "a4-poster"
+    assert lib.map_brief(_brief("CP01", "company_profile"))["format"] == \
+        "a4-poster"
 
 
 def test_map_brief_unknown_type_is_none():
@@ -85,7 +87,8 @@ def test_plan_campaign_skips_unknown_types_with_a_note():
     assert len(plan["skipped"]) == 2
     assert "ACME-BRIEF-HG01" in plan["skipped"][0]
     assert "'hologram'" in plan["skipped"][0]
-    assert "flyer, poster, pullup_banner" in plan["skipped"][0]
+    assert "company_profile, flyer, poster, pullup_banner" in \
+        plan["skipped"][0]
     # A payload with no id is still named by its position.
     assert plan["skipped"][1].startswith("brief #3:")
 
