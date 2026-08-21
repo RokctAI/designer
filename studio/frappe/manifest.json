@@ -5,7 +5,7 @@
     "tenant": {
       "dependencies": [
         "designer-compliance",
-        "startupos @ git+https://github.com/RokctAI/The-Rokct-Protocol@564536bade5c154f817b09593fda6cfda8d60012#subdirectory=core/utils/startup_os"
+        "startupos @ git+https://github.com/RokctAI/The-Rokct-Protocol@af85e3275154f4a8e4f19927d90fc0620c098539#subdirectory=core/utils/startup_os"
       ],
       "hooks": {
         "whitelisted_methods": {
@@ -34,7 +34,8 @@
           "{app_name}.api.document_request.create_document_request": "{app_name}.studio.tenant.api.document_request.create_document_request",
           "{app_name}.api.document_request.queue_document_request": "{app_name}.studio.tenant.api.document_request.queue_document_request",
           "{app_name}.api.document_request.get_document_status": "{app_name}.studio.tenant.api.document_request.get_document_status",
-          "{app_name}.api.document_request.list_document_requests": "{app_name}.studio.tenant.api.document_request.list_document_requests"
+          "{app_name}.api.document_request.list_document_requests": "{app_name}.studio.tenant.api.document_request.list_document_requests",
+          "{app_name}.api.document_request.get_artifact_gaps": "{app_name}.studio.tenant.api.document_request.get_artifact_gaps"
         },
         "fixtures": [
           {

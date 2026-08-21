@@ -18,135 +18,21 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""startupos_bridge against a stubbed ``startupos`` package: the bridge
+"""startupos_bridge against a stubbed ``startupos`` package (the fake
+in ``_fake_startupos``, faithful to the real API surface): the bridge
 must call the engine's documented API, surface its honest outputs
-(warnings, missing answers, coaching) untouched, and wrap every engine
-failure in StartupOSBridgeError."""
+(warnings, missing answers, coaching, gap reports) untouched, and wrap
+every engine failure in StartupOSBridgeError."""
 
 from __future__ import annotations
 
 import os
 import sys
-import types
 
 import pytest
 
+from _fake_startupos import install_fake_startupos
 from studio_src import startupos_bridge
-
-
-class FakeStartupOSError(Exception):
-    pass
-
-
-class FakeResult:
-    def __init__(self, out_dir):
-        self.written = ["01_executive_summary.md", "compliance_log.md",
-                        "investor_pitch_deck.pptx"]
-        self.output_dir = out_dir
-        self.warnings = ["07_financial_model.md: unresolved placeholder"]
-        self.missing_fields = {"pricing_tiers": "Pricing Tiers"}
-        self.completeness = 62.5
-        self.compliance_status = 0
-
-
-def _install_fake_startupos(monkeypatch, tmp_path, fail=False):
-    """Build a minimal fake of the pip package's surface the bridge
-    touches, injected via sys.modules (the real engine is not installed
-    in this repo's test environment)."""
-    ws = tmp_path / "StartupOS"
-    calls = {}
-
-    pkg = types.ModuleType("startupos")
-    pkg.__version__ = "0.0-test"
-
-    errors = types.ModuleType("startupos.errors")
-    errors.StartupOSError = FakeStartupOSError
-
-    paths = types.ModuleType("startupos.paths")
-    paths.resolve_workspace_root = \
-        lambda explicit=None, verbose=True: str(explicit or ws)
-    paths.instance_dir = lambda root, t, n: os.path.join(
-        str(root), "instances", t, n)
-    paths.templates_dir = lambda root, t: os.path.join(
-        str(root), "templates", t)
-
-    safe_io = types.ModuleType("startupos.safe_io")
-
-    def atomic_write(destination, content):
-        os.makedirs(os.path.dirname(destination), exist_ok=True)
-        with open(destination, "w", encoding="utf-8") as fh:
-            fh.write(content)
-
-    safe_io.atomic_write = atomic_write
-
-    compiler = types.ModuleType("startupos.compiler")
-
-    def compile_instance(instance_type, instance_name, workspace_root=None,
-                         compliance_root=None, quiet=False, render=False):
-        if fail:
-            raise FakeStartupOSError("Missing template folder")
-        calls["compile"] = {"type": instance_type, "name": instance_name,
-                            "root": workspace_root, "render": render,
-                            "compliance_root": compliance_root}
-        return FakeResult(str(ws / "out"))
-
-    def load_instance_data(instance_type, instance_name, workspace_root=None,
-                           compliance_root=None, quiet=True):
-        if fail:
-            raise FakeStartupOSError("No questions.md")
-        data = types.SimpleNamespace(out_dir=str(ws / "out"))
-        calls["load"] = {"type": instance_type, "name": instance_name}
-        return data
-
-    compiler.compile_instance = compile_instance
-    compiler.load_instance_data = load_instance_data
-
-    branding = types.ModuleType("startupos.branding")
-    branding.export_briefs = lambda data: (
-        ["briefs/poster.json", "briefs/flyer.json"],
-        ["poster brief skipped - answer 'Pricing Tiers' in questions.md"],
-    )
-
-    parser = types.ModuleType("startupos.parser")
-
-    def parse_questions_md(filepath):
-        profile = types.SimpleNamespace(
-            answers={"trading_name": "Acme"},
-            pending={"pricing_tiers": "[TODO]"},
-            labels={"trading_name": "Trading Name",
-                    "pricing_tiers": "Pricing Tiers"},
-            answered_count=1, total_count=2)
-        return profile
-
-    parser.parse_questions_md = parse_questions_md
-
-    agent_bridge = types.ModuleType("startupos.agent_bridge")
-
-    def auto_provision_profile(instance_type, instance_name,
-                               primary_base=None, key_relationships=None,
-                               jurisdiction=None, workspace_root=None,
-                               seed=None, full=False):
-        if fail:
-            raise FakeStartupOSError("Unsafe instance name")
-        calls["provision"] = {"type": instance_type, "name": instance_name,
-                              "seed": seed, "jurisdiction": jurisdiction}
-        return str(ws / "instances" / instance_type / instance_name
-                   / "questions.md")
-
-    agent_bridge.auto_provision_profile = auto_provision_profile
-
-    for name, module in (("startupos", pkg),
-                         ("startupos.errors", errors),
-                         ("startupos.paths", paths),
-                         ("startupos.safe_io", safe_io),
-                         ("startupos.compiler", compiler),
-                         ("startupos.branding", branding),
-                         ("startupos.parser", parser),
-                         ("startupos.agent_bridge", agent_bridge)):
-        monkeypatch.setitem(sys.modules, name, module)
-        if name != "startupos":
-            setattr(pkg, name.split(".")[1], module)
-    return ws, calls
 
 
 def test_missing_engine_raises_bridge_error(monkeypatch):
@@ -159,7 +45,7 @@ def test_missing_engine_raises_bridge_error(monkeypatch):
 
 
 def test_provision_profile_passes_seed_answers(monkeypatch, tmp_path):
-    ws, calls = _install_fake_startupos(monkeypatch, tmp_path)
+    ws, calls = install_fake_startupos(monkeypatch, tmp_path)
     path = startupos_bridge.provision_profile(
         "Acme", answers={"trading_name": "Acme (Pty) Ltd"},
         jurisdiction="ZA")
@@ -170,11 +56,11 @@ def test_provision_profile_passes_seed_answers(monkeypatch, tmp_path):
 
 
 def test_compile_documents_surfaces_honest_gaps(monkeypatch, tmp_path):
-    ws, calls = _install_fake_startupos(monkeypatch, tmp_path)
+    ws, calls = install_fake_startupos(monkeypatch, tmp_path)
     result = startupos_bridge.compile_documents(
         "Acme", workspace_root=str(ws), render=True)
     assert calls["compile"]["render"] is True
-    assert result["written"][-1] == "investor_pitch_deck.pptx"
+    assert "investor_pitch_deck.pptx" in result["written"]
     assert result["missing_fields"] == {"pricing_tiers": "Pricing Tiers"}
     assert result["warnings"] == \
         ["07_financial_model.md: unresolved placeholder"]
@@ -182,14 +68,119 @@ def test_compile_documents_surfaces_honest_gaps(monkeypatch, tmp_path):
 
 
 def test_compile_documents_wraps_engine_errors(monkeypatch, tmp_path):
-    _install_fake_startupos(monkeypatch, tmp_path, fail=True)
+    install_fake_startupos(monkeypatch, tmp_path, fail=True)
     with pytest.raises(startupos_bridge.StartupOSBridgeError,
                        match="Missing template folder"):
         startupos_bridge.compile_documents("Acme")
 
 
+# ------------------------------------------------- selective generation
+
+def test_compile_default_passes_no_selection(monkeypatch, tmp_path):
+    """No ``only`` -> the engine sees only=None: the full-suite
+    behaviour (pruning included) is entirely the engine's."""
+    ws, calls = install_fake_startupos(monkeypatch, tmp_path)
+    result = startupos_bridge.compile_documents("Acme")
+    assert calls["compile"]["only"] is None
+    assert "01_executive_summary.md" in result["written"]
+    assert "business_profile.md" in result["written"]
+    assert "compliance_log.md" in result["written"]
+
+
+def test_compile_selection_passes_through_verbatim(monkeypatch, tmp_path):
+    """only=[...] reaches compile_instance and the engine's written
+    list — exactly the requested artifacts plus the compliance log,
+    nothing pruned — comes back untouched."""
+    ws, calls = install_fake_startupos(monkeypatch, tmp_path)
+    result = startupos_bridge.compile_documents(
+        "Acme", only=["business_profile"])
+    assert calls["compile"]["only"] == ["business_profile"]
+    assert result["written"] == ["business_profile.md", "compliance_log.md"]
+
+
+def test_compile_selection_renders_only_selected_binaries(monkeypatch,
+                                                          tmp_path):
+    ws, _ = install_fake_startupos(monkeypatch, tmp_path)
+    result = startupos_bridge.compile_documents(
+        "Acme", only=["business_profile", "investor_pitch_deck"],
+        render=True)
+    assert result["written"] == [
+        "business_profile.md", "investor_pitch_deck.md",
+        "compliance_log.md", "investor_pitch_deck.pptx"]
+
+
+def test_compile_unknown_artifact_surfaces_engine_message(monkeypatch,
+                                                          tmp_path):
+    install_fake_startupos(monkeypatch, tmp_path)
+    with pytest.raises(startupos_bridge.StartupOSBridgeError,
+                       match=r"Unknown business artifact 'tender_pack'"
+                             r".*Valid artifacts:"):
+        startupos_bridge.compile_documents("Acme", only=["tender_pack"])
+
+
+def test_compile_empty_selection_is_loud(monkeypatch, tmp_path):
+    install_fake_startupos(monkeypatch, tmp_path)
+    with pytest.raises(startupos_bridge.StartupOSBridgeError,
+                       match="Empty artifact selection"):
+        startupos_bridge.compile_documents("Acme", only=[])
+
+
+# --------------------------------------------------------- gap reports
+
+def test_artifact_gaps_matches_the_cli_json_shape(monkeypatch, tmp_path):
+    """The bridge's report is byte-for-byte the payload the engine CLI
+    prints for ``check --for business_profile --json``."""
+    install_fake_startupos(monkeypatch, tmp_path)
+    report = startupos_bridge.artifact_gaps("Acme", ["business_profile"])
+    assert report == {
+        "instance_type": "business",
+        "instance_name": "Acme",
+        "jurisdiction": "ZA",
+        "artifacts": {
+            "business_profile": {
+                "ready": False,
+                "unanswered": [
+                    {"key": "pricing_tiers", "label": "Pricing Tiers"}],
+                "evidence": [
+                    {"key": "tax_number",
+                     "status": "tax reference not verified — "
+                               "add Tax_Pin.pdf"}],
+            },
+        },
+    }
+
+
+def test_artifact_gaps_ready_artifact(monkeypatch, tmp_path):
+    install_fake_startupos(monkeypatch, tmp_path)
+    report = startupos_bridge.artifact_gaps("Acme", ["01_executive_summary"])
+    entry = report["artifacts"]["01_executive_summary"]
+    assert entry == {"ready": True, "unanswered": [], "evidence": []}
+
+
+def test_artifact_gaps_unknown_artifact_surfaces_engine_message(
+        monkeypatch, tmp_path):
+    install_fake_startupos(monkeypatch, tmp_path)
+    with pytest.raises(startupos_bridge.StartupOSBridgeError,
+                       match="Unknown business artifact"):
+        startupos_bridge.artifact_gaps("Acme", ["nope"])
+
+
+# ------------------------------------------------------ instance values
+
+def test_instance_values_returns_string_namespace(monkeypatch, tmp_path):
+    ws, calls = install_fake_startupos(monkeypatch, tmp_path)
+    result = startupos_bridge.instance_values("Acme")
+    assert calls["load"] == {"type": "business", "name": "Acme"}
+    assert result["values"]["trading_name"] == "Acme"
+    # The engine's honest markers come through verbatim.
+    assert result["values"]["tax_number"].startswith("Pending")
+    assert result["output_dir"] == str(ws / "out")
+
+
+# ------------------------------------------------------- existing seams
+
 def test_parse_questions_returns_pending_map(monkeypatch, tmp_path):
-    _install_fake_startupos(monkeypatch, tmp_path)
+    install_fake_startupos(monkeypatch, tmp_path)
     parsed = startupos_bridge.parse_questions("questions.md")
     assert parsed["answers"] == {"trading_name": "Acme"}
     assert parsed["pending"] == {"pricing_tiers": "[TODO]"}
@@ -199,7 +190,7 @@ def test_parse_questions_returns_pending_map(monkeypatch, tmp_path):
 
 def test_export_briefs_returns_absolute_paths_and_coaching(monkeypatch,
                                                            tmp_path):
-    ws, _ = _install_fake_startupos(monkeypatch, tmp_path)
+    ws, _ = install_fake_startupos(monkeypatch, tmp_path)
     result = startupos_bridge.export_briefs("Acme")
     assert result["briefs"] == [
         os.path.join(str(ws / "out"), "briefs", "poster.json"),
@@ -210,7 +201,7 @@ def test_export_briefs_returns_absolute_paths_and_coaching(monkeypatch,
 
 def test_write_questions_places_file_at_canonical_path(monkeypatch,
                                                        tmp_path):
-    ws, _ = _install_fake_startupos(monkeypatch, tmp_path)
+    ws, _ = install_fake_startupos(monkeypatch, tmp_path)
     path = startupos_bridge.write_questions("Acme", "# Questions\n")
     assert path == os.path.join(
         str(ws), "instances", "business", "Acme", "questions.md")
@@ -219,7 +210,7 @@ def test_write_questions_places_file_at_canonical_path(monkeypatch,
 
 
 def test_bootstrap_workspace_syncs_local_templates(monkeypatch, tmp_path):
-    ws, _ = _install_fake_startupos(monkeypatch, tmp_path)
+    ws, _ = install_fake_startupos(monkeypatch, tmp_path)
     templates = tmp_path / "checkout"
     (templates / "business").mkdir(parents=True)
     (templates / "business" / "01_plan.md").write_text("x")
@@ -234,7 +225,7 @@ def test_bootstrap_workspace_syncs_local_templates(monkeypatch, tmp_path):
 
 def test_bootstrap_workspace_without_templates_names_the_fix(monkeypatch,
                                                              tmp_path):
-    ws, _ = _install_fake_startupos(monkeypatch, tmp_path)
+    ws, _ = install_fake_startupos(monkeypatch, tmp_path)
     with pytest.raises(startupos_bridge.StartupOSBridgeError,
                        match="do not ship in the startupos pip wheel"):
         startupos_bridge.bootstrap_workspace(str(ws))

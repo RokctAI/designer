@@ -87,8 +87,8 @@ studio/
 | Design Campaign Format (child) | Target format + resolved action + produced candidate/request. |
 | **Generation Provider** | `upload` and `mock` are implemented; `openai` / `stability` / `custom_http` are defined with clearly-marked NotImplementedError stubs. |
 | **Design Print Job** | Print-vendor handoff: deliverable candidate, vendor, final size / sides / material-finish, press-ready CMYK PDF, Draft/Sent/Proof Approved/In Production/Delivered. Billing hooks only — money lives in the host app. |
-| **Document Request** | The executive persona's job: StartupOS instance name, `document_scope` (Full Suite / Plan Chapters / Pitch Deck / Financial Model / Briefs), attached `questions.md` (or a workspace that already holds it), compliance folder path, `render_binaries`. Same status machine as Design Request. The engine's warnings and every unanswered question land on the request verbatim. |
-| Document Request Output (child) | One produced file: path relative to the instance's `output/` + kind (document/deck/model/brief). |
+| **Document Request** | The executive persona's job: StartupOS instance name, `document_scope` (Full Suite / Plan Chapters / Pitch Deck / Financial Model / Briefs), attached `questions.md` (or a workspace that already holds it), compliance folder path, `render_binaries`, and an optional `artifacts` selection (comma/newline-separated stems, e.g. `business_profile`): named, the engine compiles exactly those plus the compliance log and prunes nothing; empty keeps the full-suite scope behaviour unchanged. `render_profile` also renders the branded A4 company profile (cover + content SVG pages from `examples/templates/company-profile/`, palette from an optional linked Design System) when the request delivers `business_profile.md`. Same status machine as Design Request. The engine's warnings and every unanswered question land on the request verbatim. |
+| Document Request Output (child) | One produced file: path relative to the instance's `output/` + kind (document/deck/model/brief/render). |
 | **Design Studio Settings** (Single) | Defaults (provider, min score, attempts, candidates, colors, max dim), `keep_raw_days` retention, campaign regen threshold, approval-link expiry. |
 
 ## Design System from 2-3 seed colours
@@ -123,7 +123,11 @@ fails with a clear message instead of a stack trace.
 
 - Documents (executive persona): `create_document_request`,
   `queue_document_request`, `get_document_status`,
-  `list_document_requests`.
+  `list_document_requests`, and `get_artifact_gaps(business_name,
+  artifacts)` — the engine's `check --for <artifact> --json` report
+  verbatim (per artifact: `ready`, `unanswered` questions with labels,
+  missing `evidence` with the exact next step), so a caller can prompt
+  for what's missing before requesting generation. Writes nothing.
 - Exec→designer handoff: `create_campaign_from_briefs(briefs, ...)` —
   StartupOS expo-schema brief JSONs become one Design Campaign
   (`poster` → `a1-poster`, `pullup_banner` → `pullup-banner`, `flyer` →
@@ -140,8 +144,9 @@ score gating and feedback-augmented regeneration for `mock`),
 `src/tenant/documents_pipeline.py` — `process_document_request` drives the
 StartupOS engine through `src/tenant/startupos_bridge.py` (the one-file seam
 mirroring `src/tenant/engine_bridge.py`: provision/parse `questions.md`,
-compile the suite, export briefs, bootstrap a workspace from a local
-template checkout). Scheduler: daily raw-file retention
+compile the suite — selectively when the request names artifacts —
+report per-artifact gaps, export briefs, bootstrap a workspace from a
+local template checkout). Scheduler: daily raw-file retention
 (`keep_raw_days`) and stuck-request recovery, hourly queue sweep —
 both request doctypes.
 

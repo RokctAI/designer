@@ -16,10 +16,10 @@
    "fieldname": "kind",
    "fieldtype": "Select",
    "label": "Kind",
-   "options": "\ndocument\ndeck\nmodel\nbrief",
+   "options": "\ndocument\ndeck\nmodel\nbrief\nrender",
    "read_only": 1,
    "in_list_view": 1,
-   "description": "Set by the documents pipeline from the file's role"
+   "description": "Set by the documents pipeline from the file's role; render is a branded SVG page (the A4 company profile)"
   }
  ],
  "modified": "2026-08-17 09:00:00.000000",

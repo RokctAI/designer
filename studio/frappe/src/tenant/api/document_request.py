@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import frappe
 
-from .. import documents_pipeline
+from .. import documents_pipeline, startupos_bridge
 from ..lib import documents as documents_lib
 from ._common import require
 
@@ -36,12 +36,23 @@ from ._common import require
 def create_document_request(business_name, document_scope="Full Suite",
                             questions_file=None, workspace_root=None,
                             compliance_root=None, render_binaries=0,
-                            customer=None, title=None):
+                            customer=None, title=None, artifacts=None,
+                            render_profile=0, design_system=None,
+                            profile_pack_dir=None):
     """Create a request. ``questions_file`` is an already-uploaded
     private file URL of the answered questions.md; with one attached
     the request is enqueued immediately, otherwise it stays Draft until
     ``queue_document_request`` (for workspaces that already hold the
-    profile). Returns {"name"}."""
+    profile). Returns {"name"}.
+
+    ``artifacts`` (comma/newline-separated stems, e.g.
+    ``"business_profile"``) switches the engine to selective
+    generation: exactly those documents plus the compliance log are
+    delivered, nothing else is touched or pruned. Empty/absent keeps
+    the full-suite scope behaviour unchanged. ``render_profile=1`` also
+    renders the branded A4 company profile (cover + content SVG pages)
+    when the request delivers ``business_profile.md``, styled by
+    ``design_system`` when one is linked."""
     require("Document Request", "create")
     if document_scope not in documents_lib.SCOPES:
         frappe.throw(f"Unknown document scope: {document_scope}")
@@ -56,6 +67,10 @@ def create_document_request(business_name, document_scope="Full Suite",
         "workspace_root": workspace_root,
         "compliance_root": compliance_root,
         "render_binaries": 1 if int(render_binaries or 0) else 0,
+        "artifacts": artifacts,
+        "render_profile": 1 if int(render_profile or 0) else 0,
+        "design_system": design_system,
+        "profile_pack_dir": profile_pack_dir,
         "status": "Draft",
         "requested_by": frappe.session.user,
     })
@@ -106,6 +121,30 @@ def get_document_status(name):
         "outputs": [{"file_path": row.file_path, "kind": row.kind}
                     for row in (doc.outputs or [])],
     }
+
+
+@frappe.whitelist()
+def get_artifact_gaps(business_name, artifacts, workspace_root=None,
+                      compliance_root=None, instance_type="business"):
+    """What's missing for the named artifacts, before generating —
+    the engine's ``check --for <artifact> --json`` report, verbatim:
+    {"instance_type", "instance_name", "jurisdiction",
+    "artifacts": {name: {"ready", "unanswered": [{"key", "label"}],
+    "evidence": [{"key", "status"}]}}}. Callers prompt for the
+    unanswered questions and missing evidence it names, then request
+    the artifacts. Writes nothing. Unknown artifact names surface the
+    engine's message listing every valid stem."""
+    require("Document Request", "read")
+    stems = documents_lib.parse_artifacts(artifacts)
+    try:
+        return startupos_bridge.artifact_gaps(
+            business_name, stems,
+            workspace_root=workspace_root or None,
+            compliance_root=compliance_root or None,
+            instance_type=instance_type or "business",
+        )
+    except startupos_bridge.StartupOSBridgeError as exc:
+        frappe.throw(str(exc))
 
 
 @frappe.whitelist()

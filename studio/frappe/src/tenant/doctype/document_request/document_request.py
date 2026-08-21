@@ -50,6 +50,15 @@ class DocumentRequest(Document):
             frappe.throw("A business name is required")
         if self.document_scope not in _SCOPES:
             frappe.throw(f"Unknown document scope: {self.document_scope}")
+        # One selection mechanism at a time: an artifacts list replaces
+        # the scope's slicing, so any other scope would be silently
+        # ignored — refuse loudly instead.
+        if (getattr(self, "artifacts", None) or "").strip() and \
+                self.document_scope != "Full Suite":
+            frappe.throw(
+                "An artifact selection replaces the document scope; keep "
+                "document_scope as Full Suite (the default) when naming "
+                "artifacts")
         self._check_status_transition()
 
     def _check_status_transition(self):
