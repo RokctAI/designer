@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 794 1123" width="794" height="1123">
+  <!-- Company-profile cover, a4-poster (794x1123 trim at 96dpi, print).
+       Palette roles: advertiser-1 primary, 2 accent, 3 ink, 4 surface,
+       5 on-primary, 6 paper. Like the pitch-deck pack, no copy sits on
+       a primary fill, so role-poor dark systems (supacharge) audit
+       clean; primary and accent appear only as bands and rules.
+       Backgrounds extend 40px past the trim to clear a 3mm/300dpi
+       (35.4px) bleed while staying on the 8px grid. -->
+  <rect x="-40" y="-40" width="880" height="1208" fill="#f3f4f6" data-token="advertiser-4"/>
+  <rect x="-40" y="1040" width="880" height="168" fill="#1a56db" data-token="advertiser-1"/>
+  <image data-slot="logo" x="64" y="96" width="160" height="160" href=""/>
+  <text data-slot="kicker" data-fit="shrink" data-fit-width="664" data-fit-height="24"
+        x="64" y="344" font-size="16" font-weight="bold" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Kicker</text>
+  <rect x="64" y="368" width="96" height="16" fill="#f59e0b" data-token="advertiser-2"/>
+  <text data-slot="business-name" data-fit="shrink" data-fit-width="664" data-fit-height="64"
+        x="64" y="480" font-size="48" font-weight="bold" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Business Name</text>
+  <text data-slot="tagline" data-fit="shrink" data-fit-width="664" data-fit-height="32"
+        x="64" y="552" font-size="24" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Tagline</text>
+  <rect x="64" y="640" width="192" height="8" fill="#f59e0b" data-token="advertiser-2"/>
+  <text data-slot="reg-number" data-fit="shrink" data-fit-width="664" data-fit-height="24"
+        x="64" y="704" font-size="16" font-weight="bold" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Registration</text>
+  <text data-slot="vat-number" data-fit="shrink" data-fit-width="664" data-fit-height="24"
+        x="64" y="752" font-size="16" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">VAT</text>
+  <text data-slot="date" data-fit="shrink" data-fit-width="664" data-fit-height="24"
+        x="64" y="800" font-size="16" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Date</text>
+</svg>

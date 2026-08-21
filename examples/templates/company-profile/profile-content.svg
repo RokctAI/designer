@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 794 1123" width="794" height="1123">
+  <!-- Company-profile content page, a4-poster (794x1123 trim at 96dpi).
+       Overview bullets, leadership block, track-record metrics (items
+       region flowing record-cell.svg) and a contact block. All copy is
+       ink-on-surface; the accent appears only as rules, the primary
+       only as the bottom band. Backgrounds extend 40px past the trim
+       (>= the 3mm/300dpi bleed) while staying on the 8px grid. -->
+  <rect x="-40" y="-40" width="880" height="1208" fill="#f3f4f6" data-token="advertiser-4"/>
+  <rect x="-40" y="1096" width="880" height="112" fill="#1a56db" data-token="advertiser-1"/>
+  <text data-slot="kicker" data-fit="shrink" data-fit-width="664" data-fit-height="24"
+        x="64" y="104" font-size="16" font-weight="bold" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Kicker</text>
+  <rect x="64" y="120" width="96" height="8" fill="#f59e0b" data-token="advertiser-2"/>
+  <text data-slot="heading" data-fit="shrink" data-fit-width="664" data-fit-height="40"
+        x="64" y="192" font-size="32" font-weight="bold" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Heading</text>
+  <text data-slot="point-1" data-fit="shrink" data-fit-width="664" data-fit-height="24"
+        x="64" y="256" font-size="16" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Point 1</text>
+  <text data-slot="point-2" data-fit="shrink" data-fit-width="664" data-fit-height="24"
+        x="64" y="304" font-size="16" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Point 2</text>
+  <text data-slot="point-3" data-fit="shrink" data-fit-width="664" data-fit-height="24"
+        x="64" y="352" font-size="16" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Point 3</text>
+  <text data-slot="point-4" data-fit="shrink" data-fit-width="664" data-fit-height="24"
+        x="64" y="400" font-size="16" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Point 4</text>
+  <rect x="64" y="456" width="96" height="8" fill="#f59e0b" data-token="advertiser-2"/>
+  <text data-slot="leadership-title" data-fit="shrink" data-fit-width="664" data-fit-height="32"
+        x="64" y="520" font-size="24" font-weight="bold" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Leadership</text>
+  <text data-slot="lead-1" data-fit="shrink" data-fit-width="664" data-fit-height="24"
+        x="64" y="568" font-size="16" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Lead 1</text>
+  <text data-slot="lead-2" data-fit="shrink" data-fit-width="664" data-fit-height="24"
+        x="64" y="616" font-size="16" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Lead 2</text>
+  <text data-slot="lead-3" data-fit="shrink" data-fit-width="664" data-fit-height="24"
+        x="64" y="664" font-size="16" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Lead 3</text>
+  <rect x="64" y="712" width="96" height="8" fill="#f59e0b" data-token="advertiser-2"/>
+  <text data-slot="track-title" data-fit="shrink" data-fit-width="664" data-fit-height="32"
+        x="64" y="776" font-size="24" font-weight="bold" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Track record</text>
+  <rect data-region="items" data-min-cell="120" data-gutter="32"
+        x="64" y="808" width="664" height="160" fill="none"/>
+  <rect x="64" y="1000" width="192" height="8" fill="#f59e0b" data-token="advertiser-2"/>
+  <text data-slot="email" data-fit="shrink" data-fit-width="424" data-fit-height="24"
+        x="64" y="1048" font-size="16" font-weight="bold" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Email</text>
+  <text data-slot="phone" data-fit="shrink" data-fit-width="232" data-fit-height="24"
+        x="536" y="1048" font-size="16" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Phone</text>
+</svg>

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 160" width="200" height="160">
+  <!-- One track-record proof point: card face, accent strip, big value
+       (item.price), label (item.title), optional context (item.badge).
+       200x160 native: three cells fill the content page's 664px-wide
+       region (gutter 32) at exactly this geometry, so the common
+       three-metric row stays on the 8px grid. -->
+  <rect x="0" y="0" width="200" height="160" fill="#ffffff" data-token="advertiser-6"/>
+  <rect x="0" y="0" width="200" height="8" fill="#f59e0b" data-token="advertiser-2"/>
+  <text data-slot="price" data-fit="shrink" data-fit-width="152" data-fit-height="40"
+        x="24" y="72" font-size="32" font-weight="bold" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Value</text>
+  <text data-slot="title" data-fit="shrink" data-fit-width="152" data-fit-height="24"
+        x="24" y="104" font-size="16" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Label</text>
+  <text data-slot="badge" data-fit="shrink" data-fit-width="152" data-fit-height="20"
+        x="24" y="136" font-size="14" fill="#111827"
+        data-token="advertiser-3" font-family="Inter">Context</text>
+</svg>
