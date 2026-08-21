@@ -350,3 +350,102 @@ def test_ocr_unavailable_is_reported(monkeypatch, tmp_path):
     assert any("OCR unavailable" in w for w in doc.warnings)
     report = ComplianceEngine(load_system()).audit(doc)
     assert any(f.rule == "engine.capability" for f in report.findings)
+
+
+# ------------------------------------------------- unreadable image inputs
+
+
+def _flat_png(tmp_path, name="art.png", size=64):
+    arr = np.full((size, size, 3), (243, 244, 246), np.uint8)
+    arr[size // 4: size // 2, size // 4: size // 2] = (26, 86, 219)
+    p = tmp_path / name
+    Image.fromarray(arr).save(p)
+    return p
+
+
+def test_zero_byte_file_raises_invalid_image(tmp_path):
+    from designer.raster import InvalidImageError, load_image
+
+    p = tmp_path / "empty.png"
+    p.write_bytes(b"")
+    with pytest.raises(InvalidImageError, match="empty.png"):
+        load_image(p)
+
+
+def test_non_image_file_raises_invalid_image(tmp_path):
+    from designer.raster import InvalidImageError, load_image
+
+    p = tmp_path / "not_an_image.png"
+    p.write_text("hello, I am not a PNG")
+    with pytest.raises(InvalidImageError, match="not_an_image.png"):
+        load_image(p)
+
+
+def test_truncated_png_raises_invalid_image(tmp_path):
+    from designer.raster import InvalidImageError, load_image
+
+    whole = _flat_png(tmp_path).read_bytes()
+    p = tmp_path / "truncated.png"
+    p.write_bytes(whole[: len(whole) // 2])
+    with pytest.raises(InvalidImageError, match="truncated.png"):
+        load_image(p)
+
+
+def test_invalid_image_surfaces_through_vectorize_file(tmp_path):
+    from designer.raster import InvalidImageError
+
+    p = tmp_path / "empty.png"
+    p.write_bytes(b"")
+    with pytest.raises(InvalidImageError):
+        vectorize_file(p)
+
+
+def test_cli_reports_invalid_image_cleanly(tmp_path, capsys):
+    from designer.cli import main as cli_main
+
+    p = tmp_path / "empty.png"
+    p.write_bytes(b"")
+    code = cli_main(["vectorize", str(p), "-o", str(tmp_path / "out.svg")])
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "error:" in captured.err
+    assert "empty.png" in captured.err
+
+
+def test_decompression_bomb_raises_invalid_image(tmp_path, monkeypatch):
+    from PIL import Image as PILImage
+
+    from designer.raster import InvalidImageError, load_image
+
+    p = _flat_png(tmp_path, size=64)
+    monkeypatch.setattr(PILImage, "MAX_IMAGE_PIXELS", 10)
+    with pytest.raises(InvalidImageError, match="too large"):
+        load_image(p)
+
+
+# --------------------------------------- load_image downscales before RGBA
+
+
+def test_load_image_output_unchanged_by_resize_order(tmp_path):
+    """Downscale-then-convert must give the same pixels the old
+    convert-then-downscale order produced, for RGB and palette inputs."""
+    from designer.raster import load_image
+
+    rng = np.random.default_rng(7)
+    arr = rng.integers(0, 255, (200, 300, 3), np.uint8)
+    p = tmp_path / "rgb.png"
+    Image.fromarray(arr).save(p)
+    got = load_image(p, max_dim=128)
+    ref = Image.open(p).convert("RGBA")
+    scale = 128 / 300
+    ref = ref.resize((128, max(1, round(200 * scale))), Image.LANCZOS)
+    assert got.mode == "RGBA"
+    assert np.array_equal(np.asarray(got), np.asarray(ref))
+
+    pal = Image.fromarray(arr).convert("P", palette=Image.ADAPTIVE, colors=16)
+    p2 = tmp_path / "pal.png"
+    pal.save(p2, transparency=3)
+    got2 = load_image(p2, max_dim=None)
+    ref2 = Image.open(p2).convert("RGBA")
+    assert got2.mode == "RGBA"
+    assert np.array_equal(np.asarray(got2), np.asarray(ref2))

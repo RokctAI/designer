@@ -121,10 +121,16 @@ def _create_candidate(req, slot: int, attempt: int, result: dict,
         "generation_ms": generation_ms,
         "revision_of": revision_of,
     })
-    cand.insert(ignore_permissions=True)
-    svg_file = _save_private_file(
-        result["svg"], f"{cand.name}.svg", "Design Candidate", cand.name)
-    cand.db_set("compliant_svg", svg_file.file_url)
+    try:
+        cand.insert(ignore_permissions=True)
+        svg_file = _save_private_file(
+            result["svg"], f"{cand.name}.svg", "Design Candidate", cand.name)
+        cand.db_set("compliant_svg", svg_file.file_url)
+    except Exception:
+        # Never let a later commit (e.g. _fail) persist a candidate row
+        # that is missing its compliant_svg.
+        frappe.db.rollback()
+        raise
     frappe.db.commit()  # save as soon as it exists so the UI can stream
     return cand
 

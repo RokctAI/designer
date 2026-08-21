@@ -32,6 +32,7 @@ __version__ = "0.1.0"
 from designer.tokens import DesignSystem, load_system, system_from_dict
 from designer.engine import ComplianceEngine
 from designer.palette import derive_system
+from designer.raster import InvalidImageError
 from designer.vectorize import ComplexityError
 from designer.render import render_pdf, render_png
 from designer.template import Item, TemplateData, TemplateError, UnitTooSmall, render as render_template
@@ -43,6 +44,7 @@ __all__ = [
     "derive_system",
     "ComplianceEngine",
     "ComplexityError",
+    "InvalidImageError",
     "render_png",
     "render_pdf",
     "render_template",
