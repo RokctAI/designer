@@ -39,6 +39,7 @@ import frappe
 from . import startupos_bridge
 from .lib import documents as documents_lib
 from .lib import gating
+from .lib import profile as profile_lib
 
 
 def _fail(req, message: str):
@@ -102,7 +103,8 @@ def process_document_request(name: str):
             produced = _process_briefs(req)
         else:
             produced = _process_compile(req, scope)
-    except startupos_bridge.StartupOSBridgeError as exc:
+    except (startupos_bridge.StartupOSBridgeError,
+            profile_lib.ProfileRenderError) as exc:
         _fail(req, str(exc))
         return
     except Exception as exc:
@@ -120,22 +122,45 @@ def process_document_request(name: str):
 
 
 def _process_compile(req, scope: str) -> int:
-    """Compile the suite and record the scope's slice of the written
-    files. The engine's warnings and unanswered questions land on the
-    request verbatim — an incomplete profile still compiles (documents
-    carry the gaps); only zero recorded outputs fails the request."""
+    """Compile and record the request's deliverables. The engine's
+    warnings and unanswered questions land on the request verbatim — an
+    incomplete profile still compiles (documents carry the gaps); only
+    zero recorded outputs fails the request.
+
+    Without an artifact selection the whole suite compiles and the
+    scope decides the recorded slice (unchanged behaviour). With one,
+    the engine compiles selectively — exactly the named artifacts plus
+    the compliance log, nothing pruned — and every written file is
+    recorded."""
+    artifacts = documents_lib.parse_artifacts(
+        getattr(req, "artifacts", None))
     result = startupos_bridge.compile_documents(
         req.business_name,
         workspace_root=req.workspace_root or None,
         compliance_root=req.compliance_root or None,
         render=documents_lib.needs_render(scope, bool(req.render_binaries)),
+        only=artifacts or None,
     )
-    selected = documents_lib.select_outputs(scope, result["written"])
+    if artifacts:
+        selected = list(result["written"])
+    else:
+        selected = documents_lib.select_outputs(scope, result["written"])
     rows = [{"file_path": rel, "kind": _kind(rel)} for rel in selected]
+
+    warnings = list(result["warnings"])
+    if getattr(req, "render_profile", 0):
+        if documents_lib.BUSINESS_PROFILE_FILENAME in selected:
+            rows.extend(_render_branded_profile(req, result["output_dir"]))
+        else:
+            warnings.append(
+                "Render A4 Profile was requested but this request does not "
+                f"deliver {documents_lib.BUSINESS_PROFILE_FILENAME}; add "
+                f"{documents_lib.BUSINESS_PROFILE_STEM} to the artifact "
+                "selection (or use a markdown scope). Nothing was rendered.")
+
     _record_outputs(
         req, rows,
-        documents_lib.format_warnings(result["warnings"],
-                                      result["missing_fields"]),
+        documents_lib.format_warnings(warnings, result["missing_fields"]),
         result.get("completeness"),
     )
     if not rows:
@@ -143,6 +168,38 @@ def _process_compile(req, scope: str) -> int:
                    f"The compiler wrote {len(result['written'])} files but "
                    f"none matched scope {scope!r}")
     return len(rows)
+
+
+def _render_branded_profile(req, output_dir: str) -> list[dict]:
+    """Render the branded A4 company profile (cover + content page)
+    beside the engine's artifacts and return their output rows. The
+    palette comes from the request's Design System when one is linked,
+    else the engine's default system; slot text comes only from real
+    compiled answers — the mapping never invents data."""
+    values = startupos_bridge.instance_values(
+        req.business_name,
+        workspace_root=req.workspace_root or None,
+        compliance_root=req.compliance_root or None,
+    )
+    system_dict = None
+    if getattr(req, "design_system", None):
+        from .lib.engine_dict import engine_dict_from_doc
+        system_dict = engine_dict_from_doc(
+            frappe.get_doc("Design System", req.design_system))
+
+    pages = profile_lib.render_profile_pages(
+        values["values"], system_dict=system_dict,
+        pack_dir=getattr(req, "profile_pack_dir", None) or None,
+        generated_on=frappe.utils.nowdate(),
+    )
+    rows = []
+    for rel, svg_text in pages.items():
+        destination = os.path.join(output_dir, *rel.split("/"))
+        os.makedirs(os.path.dirname(destination), exist_ok=True)
+        with open(destination, "w", encoding="utf-8") as fh:
+            fh.write(svg_text)
+        rows.append({"file_path": rel, "kind": "render"})
+    return rows
 
 
 def _process_briefs(req) -> int:

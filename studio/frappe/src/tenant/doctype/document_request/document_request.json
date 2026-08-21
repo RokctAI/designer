@@ -57,7 +57,33 @@
    "fieldtype": "Check",
    "label": "Render Binaries",
    "default": "0",
-   "description": "Also render the investor deck .pptx and financial model .xlsx; Pitch Deck / Financial Model scopes render regardless"
+   "description": "Also render the investor deck .pptx and financial model .xlsx; Pitch Deck / Financial Model scopes render regardless. With an artifact selection, only binaries whose source document was selected are rendered"
+  },
+  {
+   "fieldname": "artifacts",
+   "fieldtype": "Small Text",
+   "label": "Artifacts",
+   "description": "Optional comma/newline-separated artifact stems (e.g. business_profile). Named: the engine compiles exactly these plus the compliance log and prunes nothing (document_scope must stay Full Suite). Empty: the full suite compiles and the scope picks the deliverables, unchanged"
+  },
+  {
+   "fieldname": "render_profile",
+   "fieldtype": "Check",
+   "label": "Render A4 Profile",
+   "default": "0",
+   "description": "Also render the branded A4 company profile (cover + content SVG pages, a4-poster preset) when this request delivers business_profile.md. Slots are filled only from real compiled answers"
+  },
+  {
+   "fieldname": "design_system",
+   "fieldtype": "Link",
+   "label": "Design System",
+   "options": "Design System",
+   "description": "Palette for the A4 profile render; empty uses the engine's default system"
+  },
+  {
+   "fieldname": "profile_pack_dir",
+   "fieldtype": "Data",
+   "label": "Profile Pack Folder",
+   "description": "Path to the company-profile template pack on this bench (examples/templates/company-profile/ from RokctAI/designer, which does not ship in the designer-compliance pip wheel); empty looks beside the installed designer package"
   },
   {
    "fieldname": "status",

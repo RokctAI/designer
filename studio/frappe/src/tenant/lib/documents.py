@@ -20,10 +20,13 @@
 
 """Document Request scope logic — pure functions, no frappe, no engine.
 
-The StartupOS compiler always regenerates the whole suite (its output
-pruning depends on that); ``document_scope`` decides which of the
-written files the request records as its deliverables, and whether the
-binary artifacts must be rendered at all.
+Two selection mechanisms, one at a time. Without an ``artifacts`` list
+the compiler regenerates the whole suite (its output pruning depends on
+that) and ``document_scope`` decides which of the written files the
+request records as its deliverables. With an ``artifacts`` list the
+engine compiles selectively — exactly the named artifacts plus the
+compliance log, nothing pruned — and the request records everything the
+engine wrote.
 """
 
 from __future__ import annotations
@@ -33,11 +36,35 @@ from typing import Mapping, Sequence
 SCOPES = ("Full Suite", "Plan Chapters", "Pitch Deck", "Financial Model",
           "Briefs")
 
+# The tender-returnable company profile: the artifact stem callers name
+# in a selection, and the compiled file whose presence in a request's
+# deliverables unlocks the branded A4 render.
+BUSINESS_PROFILE_STEM = "business_profile"
+BUSINESS_PROFILE_FILENAME = "business_profile.md"
+
 # Scopes that require render=True regardless of the request's checkbox.
 RENDER_SCOPES = ("Pitch Deck", "Financial Model")
 
 PITCH_DECK_SUFFIX = ".pptx"
 FINANCIAL_MODEL_SUFFIX = ".xlsx"
+
+
+def parse_artifacts(text: str | None) -> list[str]:
+    """A request's artifact selection field -> ordered unique stems.
+
+    Accepts commas and/or newlines (the shapes ``check --for`` accepts);
+    empty or absent means no selection — the full-suite default. Name
+    validation is the engine's: unknown stems raise its
+    UnknownArtifactError, which lists every valid artifact.
+    """
+    if not text:
+        return []
+    stems: list[str] = []
+    for chunk in str(text).replace("\n", ",").split(","):
+        stem = chunk.strip()
+        if stem and stem not in stems:
+            stems.append(stem)
+    return stems
 
 
 def needs_render(scope: str, render_binaries: bool) -> bool:

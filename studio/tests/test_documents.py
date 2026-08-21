@@ -75,6 +75,27 @@ def test_needs_render(scope, checkbox, expected):
     assert lib.needs_render(scope, checkbox) is expected
 
 
+# ------------------------------------------------ artifact selections
+
+def test_parse_artifacts_absent_or_empty_means_no_selection():
+    assert lib.parse_artifacts(None) == []
+    assert lib.parse_artifacts("") == []
+    assert lib.parse_artifacts(" , \n , ") == []
+
+
+def test_parse_artifacts_splits_commas_and_newlines_and_dedupes():
+    assert lib.parse_artifacts(
+        "business_profile, investor_pitch_deck\nbusiness_profile"
+    ) == ["business_profile", "investor_pitch_deck"]
+
+
+def test_parse_artifacts_keeps_stems_verbatim_for_the_engine():
+    """No local validation or normalisation — unknown stems must reach
+    the engine, whose UnknownArtifactError lists the valid names."""
+    assert lib.parse_artifacts("business_profile.md") == \
+        ["business_profile.md"]
+
+
 # ---------------------------------------------------------- warnings
 
 def test_format_warnings_keeps_engine_text_verbatim_and_names_gaps():

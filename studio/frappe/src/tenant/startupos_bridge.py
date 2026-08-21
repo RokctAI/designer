@@ -128,11 +128,20 @@ def parse_questions(path: str) -> dict:
 def compile_documents(instance_name: str, workspace_root: str | None = None,
                       compliance_root: str | None = None,
                       instance_type: str = "business",
-                      render: bool = False) -> dict:
-    """Compile the full template suite for one instance (the engine
-    prunes stale files in ``output/`` itself). ``render=True`` also
+                      render: bool = False,
+                      only: list[str] | None = None) -> dict:
+    """Compile the template suite for one instance. ``render=True`` also
     regenerates the binary artifacts (investor deck .pptx, financial
     model .xlsx) for business instances.
+
+    ``only`` — a list of artifact stems (e.g. ``["business_profile"]``)
+    — switches the engine to selective generation: exactly those
+    documents are written, plus the compliance log for a business
+    instance, and nothing else in ``output/`` is touched or pruned.
+    ``only=None`` keeps the full-suite behaviour unchanged (the engine
+    prunes stale files itself). Unknown or empty selections surface the
+    engine's UnknownArtifactError message, which lists every valid
+    artifact.
 
     Returns {"written" (relative names), "output_dir", "warnings",
     "missing_fields" (key -> human label of every unanswered question —
@@ -148,6 +157,7 @@ def compile_documents(instance_name: str, workspace_root: str | None = None,
             compliance_root=compliance_root or None,
             quiet=True,
             render=bool(render),
+            only=list(only) if only is not None else None,
         )
     except errors.StartupOSError as exc:
         raise StartupOSBridgeError(str(exc)) from exc
@@ -158,6 +168,83 @@ def compile_documents(instance_name: str, workspace_root: str | None = None,
         "missing_fields": dict(result.missing_fields),
         "completeness": float(result.completeness),
         "compliance_status": result.compliance_status,
+    }
+
+
+def artifact_gaps(instance_name: str, artifacts: list[str],
+                  workspace_root: str | None = None,
+                  compliance_root: str | None = None,
+                  instance_type: str = "business") -> dict:
+    """What blocks each requested artifact, without writing anything —
+    the same report as the engine CLI's ``check --for <artifact> --json``
+    and byte-for-byte the same JSON shape:
+
+    {"instance_type", "instance_name", "jurisdiction",
+     "artifacts": {name: {"ready", "unanswered": [{"key", "label"}],
+                          "evidence": [{"key", "status"}]}}}
+
+    "Unanswered" are questions the artifact renders that are pending or
+    absent from questions.md; "evidence" are applicable compliance
+    fields backed by neither a parsed certificate nor an operator
+    override, each with the engine's exact next step. Unknown artifact
+    names surface the engine's UnknownArtifactError listing the valid
+    stems.
+    """
+    _, compiler, _, _, _, _, errors = _startupos_modules()
+    try:
+        data = compiler.load_instance_data(
+            instance_type=instance_type,
+            instance_name=instance_name,
+            workspace_root=workspace_root or None,
+            compliance_root=compliance_root or None,
+            quiet=True,
+        )
+        report = compiler.missing_for_artifacts(data, list(artifacts))
+    except errors.StartupOSError as exc:
+        raise StartupOSBridgeError(str(exc)) from exc
+    return {
+        "instance_type": data.instance_type,
+        "instance_name": data.instance_name,
+        "jurisdiction": data.jurisdiction.code,
+        "artifacts": {
+            name: {
+                "ready": not (entry["unanswered"] or entry["evidence"]),
+                "unanswered": [{"key": key, "label": label}
+                               for key, label in entry["unanswered"].items()],
+                "evidence": [{"key": key, "status": hint}
+                             for key, hint in entry["evidence"].items()],
+            }
+            for name, entry in report.items()
+        },
+    }
+
+
+def instance_values(instance_name: str, workspace_root: str | None = None,
+                    compliance_root: str | None = None) -> dict:
+    """The engine's merged renderer namespace for one business instance
+    (answers + jurisdiction + compliance values), for populating branded
+    templates. Writes nothing.
+
+    Returns {"values" (placeholder -> string, non-string values
+    dropped), "output_dir"}. Values keep the engine's honest markers
+    ("Not yet provided", "Pending — ...") verbatim; consumers must not
+    print those into branded output.
+    """
+    _, compiler, _, _, _, _, errors = _startupos_modules()
+    try:
+        data = compiler.load_instance_data(
+            instance_type="business",
+            instance_name=instance_name,
+            workspace_root=workspace_root or None,
+            compliance_root=compliance_root or None,
+            quiet=True,
+        )
+    except errors.StartupOSError as exc:
+        raise StartupOSBridgeError(str(exc)) from exc
+    return {
+        "values": {key: value for key, value in data.values.items()
+                   if isinstance(value, str)},
+        "output_dir": data.out_dir,
     }
 
 
