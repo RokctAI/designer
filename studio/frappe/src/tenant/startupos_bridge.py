@@ -46,6 +46,24 @@ class StartupOSBridgeError(Exception):
     """StartupOS failure with a user-facing message."""
 
 
+def _ensure_within(base_dir: str, path: str) -> str:
+    """Containment check: return ``path`` unchanged after verifying it
+    does not escape ``base_dir`` once symlinks and ``..`` segments are
+    resolved. Raises StartupOSBridgeError on any traversal attempt."""
+    base = os.path.realpath(base_dir)
+    resolved = os.path.realpath(path)
+    if resolved != base and not resolved.startswith(base + os.sep):
+        raise StartupOSBridgeError(
+            f"Unsafe path {path!r} escapes {base_dir!r}")
+    return path
+
+
+def _contained_join(base_dir: str, *parts: str) -> str:
+    """``os.path.join`` confined to ``base_dir`` — the joined path is
+    validated with :func:`_ensure_within` before it is returned."""
+    return _ensure_within(base_dir, os.path.join(base_dir, *parts))
+
+
 def _startupos_modules():
     """Import lazily so this module stays importable when the startupos
     pip package is absent (e.g. plain unit tests)."""
@@ -96,9 +114,10 @@ def write_questions(instance_name: str, content: str,
     from startupos import safe_io
     try:
         root = _resolve_root(paths, workspace_root)
-        directory = paths.instance_dir(root, instance_type, instance_name)
+        directory = _ensure_within(
+            root, paths.instance_dir(root, instance_type, instance_name))
         os.makedirs(directory, exist_ok=True)
-        destination = os.path.join(directory, "questions.md")
+        destination = _contained_join(directory, "questions.md")
         safe_io.atomic_write(destination, content)
         return destination
     except errors.StartupOSError as exc:
@@ -272,7 +291,7 @@ def export_briefs(instance_name: str, workspace_root: str | None = None,
     except errors.StartupOSError as exc:
         raise StartupOSBridgeError(str(exc)) from exc
     return {
-        "briefs": [os.path.join(data.out_dir, *rel.split("/"))
+        "briefs": [_contained_join(data.out_dir, *rel.split("/"))
                    for rel in written],
         "coaching": list(coaching),
         "output_dir": data.out_dir,
@@ -297,7 +316,7 @@ def bootstrap_workspace(workspace_root: str,
         raise StartupOSBridgeError(str(exc)) from exc
 
     for instance_type in ("business", "life"):
-        os.makedirs(os.path.join(root, "instances", instance_type),
+        os.makedirs(_contained_join(root, "instances", instance_type),
                     exist_ok=True)
 
     synced: list[str] = []
@@ -306,10 +325,10 @@ def bootstrap_workspace(workspace_root: str,
             raise StartupOSBridgeError(
                 f"templates_dir {templates_dir} does not exist")
         for entry in sorted(os.listdir(templates_dir)):
-            source = os.path.join(templates_dir, entry)
+            source = _contained_join(templates_dir, entry)
             if not os.path.isdir(source):
                 continue
-            shutil.copytree(source, os.path.join(root, "templates", entry),
+            shutil.copytree(source, _contained_join(root, "templates", entry),
                             dirs_exist_ok=True)
             synced.append(entry)
         if not synced:

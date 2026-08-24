@@ -48,6 +48,20 @@ def _fail(req, message: str):
     frappe.db.commit()
 
 
+def _contained_output_path(output_dir: str, relative_path: str) -> str:
+    """Join ``relative_path`` under ``output_dir`` with a containment
+    check: the resolved destination must stay inside ``output_dir``
+    (symlinks and ``..`` segments resolved), otherwise the request
+    fails loudly instead of writing outside the engine's output tree."""
+    destination = os.path.join(output_dir, *relative_path.split("/"))
+    base = os.path.realpath(output_dir)
+    if not os.path.realpath(destination).startswith(base + os.sep):
+        frappe.throw(
+            f"Refusing to write {relative_path!r} outside the request's "
+            "output directory")
+    return destination
+
+
 def _file_disk_path(file_url: str) -> str:
     fname = frappe.db.get_value("File", {"file_url": file_url}, "name")
     if not fname:
@@ -194,7 +208,7 @@ def _render_branded_profile(req, output_dir: str) -> list[dict]:
     )
     rows = []
     for rel, svg_text in pages.items():
-        destination = os.path.join(output_dir, *rel.split("/"))
+        destination = _contained_output_path(output_dir, rel)
         os.makedirs(os.path.dirname(destination), exist_ok=True)
         with open(destination, "w", encoding="utf-8") as fh:
             fh.write(svg_text)
