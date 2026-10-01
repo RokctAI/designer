@@ -133,6 +133,52 @@ def _is_flat_artwork(labels: np.ndarray, original: np.ndarray, region) -> bool:
     return share >= _FLAT_ART_SHARE
 
 
+# Edge softness = median edge width (full width at half maximum of the
+# gradient across each edge). Clean vector art ~2px; typical AI output
+# ~3-4px (warn, it still traces usably); a blurry photo of a logo 5px+
+# (block: the trace can't be crisp).
+_SOFT_EDGE_WARN_PX = 2.5
+_SOFT_EDGE_BLOCK_PX = 4.5
+_EDGE_MIN_CONTRAST = 12.0  # RGB gradient below this is texture, not an edge
+_EDGE_REACH = 24  # px scanned each side of an edge peak
+
+
+def edge_width(rgb: np.ndarray) -> float:
+    """Median width, in px, of the colour transitions across edges: at
+    each gradient peak, count the pixels along the gradient axis whose
+    gradient is still at least half the peak. 0.0 when there are no
+    edges."""
+    a = rgb.astype(np.float32)
+    dx = np.zeros(a.shape[:2], np.float32)
+    dy = np.zeros_like(dx)
+    dx[:, 1:-1] = np.abs(a[:, 2:] - a[:, :-2]).sum(axis=2) / 2
+    dy[1:-1, :] = np.abs(a[2:] - a[:-2]).sum(axis=2) / 2
+    horiz = dx >= dy
+    g = np.where(horiz, dx, dy)
+    peak = np.where(
+        horiz,
+        (dx >= np.roll(dx, 1, 1)) & (dx > np.roll(dx, -1, 1)),
+        (dy >= np.roll(dy, 1, 0)) & (dy > np.roll(dy, -1, 0)),
+    ) & (g > _EDGE_MIN_CONTRAST)
+    ys, xs = np.nonzero(peak)
+    if len(ys) == 0:
+        return 0.0
+    h, w = g.shape
+    half = g[ys, xs] / 2
+    along_x = horiz[ys, xs]
+    width = np.ones(len(ys), np.float32)
+    for sign in (1, -1):
+        alive = np.ones(len(ys), bool)
+        for k in range(1, _EDGE_REACH):
+            yy = np.clip(ys + np.where(along_x, 0, sign * k), 0, h - 1)
+            xx = np.clip(xs + np.where(along_x, sign * k, 0), 0, w - 1)
+            alive &= np.where(along_x, dx[yy, xx], dy[yy, xx]) >= half
+            width += alive
+            if not alive.any():
+                break
+    return float(np.median(width))
+
+
 # ------------------------------------------------------- fringe cleanup
 
 # A layer is a fringe when nearly all of its pixels touch another layer
@@ -640,6 +686,7 @@ def vectorize_file(path: str | Path, options: VectorizeOptions | None = None) ->
 
     photo_regions = []
     doc_blockers: list[str] = []
+    soft_note = None
     if options.hybrid:
         from designer.hybrid import extract_photo_regions, photo_coverage
 
@@ -667,6 +714,17 @@ def vectorize_file(path: str | Path, options: VectorizeOptions | None = None) ->
     # label noise) and only touches the flat-art pixels left to trace.
     if options.absorb_fringes:
         absorb_fringe_pixels(qimg, np.asarray(img.convert("RGB"), dtype=np.uint8))
+    softness = edge_width(np.asarray(img.convert("RGB"), dtype=np.uint8))
+    if softness > _SOFT_EDGE_BLOCK_PX:
+        doc_blockers.append(
+            f"source edges are too soft to trace sharply (about {softness:.1f}px of "
+            "edge width); the vector will not be crisp. Supply a sharper source"
+        )
+    elif softness > _SOFT_EDGE_WARN_PX:
+        soft_note = (
+            f"source edges are soft (about {softness:.1f}px of edge width); "
+            "the trace will not be fully crisp"
+        )
     if options.denoise_passes > 0:
         qimg.labels = majority_smooth(qimg.labels, len(qimg.palette), options.denoise_passes)
     labels = qimg.labels
@@ -708,6 +766,8 @@ def vectorize_file(path: str | Path, options: VectorizeOptions | None = None) ->
     if ocr_note:
         doc.warnings.append(ocr_note)
     doc.blockers.extend(doc_blockers)
+    if soft_note:
+        doc.warnings.append(soft_note)
 
     for span in spans:
         attrs = {

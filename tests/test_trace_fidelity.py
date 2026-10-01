@@ -114,3 +114,13 @@ def test_render_fails_when_brand_font_missing(tmp_path):
     out = tmp_path / "t.png"
     assert main(["render", str(svg), "-o", str(out)]) == 1
     assert main(["render", str(svg), "-o", str(out), "--allow-font-substitute"]) == 0
+
+
+def test_soft_source_warns_and_very_soft_blocks(tmp_path):
+    sharp = vectorize_file(_soft_logo(tmp_path / "a.png", blur=0.0), VectorizeOptions(extract_text=False))
+    assert not any("soft" in w for w in sharp.warnings) and not sharp.blockers
+
+    soft = vectorize_file(_soft_logo(tmp_path / "b.png", blur=3.0), VectorizeOptions(extract_text=False))
+    very = vectorize_file(_soft_logo(tmp_path / "c.png", blur=6.0), VectorizeOptions(extract_text=False))
+    assert any("soft" in w for w in soft.warnings) or any("soft" in b for b in soft.blockers)
+    assert any("too soft" in b for b in very.blockers)

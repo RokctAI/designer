@@ -92,7 +92,9 @@ AI image  ──►  vectorize  ──►  audit against design system  ──�
   at 49 and the CLI exits non-zero whatever `--min-score` says.
   `designer render` likewise fails when a design-system font is not
   installed (the system expects its fonts to be available); pass
-  `--allow-font-substitute` for a draft.
+  `--allow-font-substitute` for a draft. Source sharpness is measured
+  too (median edge width): soft input (typical AI output, ~3-4px) is a
+  warning; a blurry source (over 4.5px, e.g. a photo of a logo) blocks.
 - **Auto-fix.** Snaps every fill/stroke to the perceptually nearest
   brand token **for its role** (a full-bleed background lands on a
   surface color, never a bright accent), merges palettes over the cap, recolors low-contrast text
