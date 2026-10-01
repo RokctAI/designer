@@ -47,4 +47,8 @@ class CapabilityRule(Rule):
             findings.append(
                 Finding(rule=self.id, severity=severity, message=warning)
             )
+        for blocker in doc.blockers:
+            findings.append(
+                Finding(rule=self.id, severity=Severity.ERROR, message=blocker, blocking=True)
+            )
         return findings

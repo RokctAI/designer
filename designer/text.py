@@ -289,6 +289,12 @@ def _read(
         color = _text_color(arr, left, top, right, bottom)
         if color is None:
             continue  # no pixels stand out from the background: not text
+        if _mixed_ink(arr, left, top, right, bottom):
+            # Two or more inks inside one "word" box: it's artwork that
+            # OCR read as letters (a logo mark + wordmark). Re-setting it
+            # as one-colour text would erase the artwork, so leave it to
+            # the tracer.
+            continue
 
         spans.append(
             TextSpan(
@@ -340,6 +346,26 @@ def _text_color(
     if delta_e(color, bg) < 0.08:
         return None
     return color
+
+
+# Share of glyph pixels allowed to sit far from the box's main ink
+# before the box counts as multi-colour artwork rather than text.
+_MIXED_INK_SHARE = 0.2
+_MIXED_INK_DISTANCE = 120
+
+
+def _mixed_ink(arr: np.ndarray, left: int, top: int, right: int, bottom: int) -> bool:
+    ring = _border_ring(arr, left, top, right, bottom)
+    if len(ring) == 0:
+        return False
+    bg = np.median(ring, axis=0)
+    box = arr[top:bottom, left:right].reshape(-1, 3).astype(np.int16)
+    glyph = box[np.abs(box - bg).sum(axis=1) > 60]
+    if len(glyph) < 10:
+        return False
+    ink = np.median(glyph, axis=0)
+    off = np.abs(glyph - ink).sum(axis=1) > _MIXED_INK_DISTANCE
+    return float(off.mean()) > _MIXED_INK_SHARE
 
 
 def _erase_box(arr: np.ndarray, left: int, top: int, right: int, bottom: int) -> None:

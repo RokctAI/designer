@@ -87,6 +87,156 @@ class VectorizeOptions:
     max_edge_density: float = 0.4
     max_photo_coverage: float = 0.85
     force: bool = False  # override the complexity guard
+    # Anti-alias cleanup: thin colour layers that only exist as a 1-2px
+    # rim between two real shapes (edge blending, JPEG ringing) are
+    # absorbed into their neighbours instead of traced as halo outlines.
+    absorb_fringes: bool = True
+    # Edge denoise: majority-vote passes over the label map, so JPEG
+    # noise and stair-steps along a boundary don't become wobbly curves.
+    denoise_passes: int = 2
+    # Stair-step averaging radius (px) on traced outlines before curve
+    # fitting; square corners are preserved. 0 disables.
+    edge_smoothing: int = 2
+
+
+# A real photo spreads over many colours; flat art the hybrid pass
+# embedded anyway (thin script with blurred edges) is a few inks plus
+# the blends between them. A pixel is "explained" when it lies near a
+# straight line between two of the region's dominant colours.
+_FLAT_ART_INKS = 3
+_FLAT_ART_TOLERANCE = 30.0  # RGB distance from the nearest ink-to-ink blend
+_FLAT_ART_SHARE = 0.85
+
+
+def _is_flat_artwork(labels: np.ndarray, original: np.ndarray, region) -> bool:
+    ys = slice(region.y, region.y + region.height)
+    xs = slice(region.x, region.x + region.width)
+    crop_labels = labels[ys, xs]
+    valid = crop_labels >= 0
+    if not valid.any():
+        return False
+    counts = np.bincount(crop_labels[valid])
+    inks_idx = np.argsort(counts)[::-1][:_FLAT_ART_INKS]
+    pix = original[ys, xs][valid].astype(np.float32)
+    inks = [pix[crop_labels[valid] == i].mean(axis=0) for i in inks_idx if counts[i] > 0]
+    best = np.full(len(pix), np.inf, dtype=np.float32)
+    for j, a in enumerate(inks):
+        for b in inks[j:]:
+            ab = b - a
+            denom = float((ab * ab).sum())
+            t = np.zeros(len(pix), np.float32) if denom == 0 else np.clip(
+                ((pix - a) @ ab) / denom, 0.0, 1.0
+            )
+            nearest = a + t[:, None] * ab
+            best = np.minimum(best, np.sqrt(((pix - nearest) ** 2).sum(axis=1)))
+    share = float((best <= _FLAT_ART_TOLERANCE).mean())
+    return share >= _FLAT_ART_SHARE
+
+
+# ------------------------------------------------------- fringe cleanup
+
+# A layer is a fringe when nearly all of its pixels touch another layer
+# (it has no interior) and it is a small share of the image.
+_FRINGE_EDGE_RATIO = 0.75
+_FRINGE_MAX_COVERAGE = 0.06
+
+
+def _boundary(labels: np.ndarray) -> np.ndarray:
+    edge = np.zeros(labels.shape, dtype=bool)
+    edge[:, 1:] |= labels[:, 1:] != labels[:, :-1]
+    edge[:, :-1] |= labels[:, :-1] != labels[:, 1:]
+    edge[1:, :] |= labels[1:, :] != labels[:-1, :]
+    edge[:-1, :] |= labels[:-1, :] != labels[1:, :]
+    return edge
+
+
+def fringe_layers(qimg: QuantizedImage) -> list[int]:
+    """Palette indices whose pixels are almost all rim, never body."""
+    labels = qimg.labels
+    edge = _boundary(labels)
+    fringes = []
+    for i in range(len(qimg.palette)):
+        layer = labels == i
+        count = int(layer.sum())
+        if count == 0 or qimg.coverage[i] > _FRINGE_MAX_COVERAGE:
+            continue
+        if float((edge & layer).sum()) / count >= _FRINGE_EDGE_RATIO:
+            fringes.append(i)
+    return fringes
+
+
+def absorb_fringe_pixels(
+    qimg: QuantizedImage, original: np.ndarray | None = None, max_passes: int = 4
+) -> int:
+    """Reassign fringe-layer pixels to a neighbouring non-fringe layer,
+    so shapes meet edge to edge like a hand trace. With the original
+    pixels, each rim pixel joins whichever neighbouring layer its colour
+    is closer to, which puts the edge at the blend midpoint (a smooth
+    contour); without, the most common neighbour wins.
+    Returns the number of pixels reassigned."""
+    fringes = fringe_layers(qimg)
+    if not fringes:
+        return 0
+    labels = qimg.labels
+    n = len(qimg.palette)
+    pending = np.isin(labels, fringes)
+    moved = 0
+    for _ in range(max_passes):
+        if not pending.any():
+            break
+        votes = np.zeros((n,) + labels.shape, dtype=np.int16)
+        solid = (labels >= 0) & ~pending
+        for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+            src = np.roll(labels, (dy, dx), axis=(0, 1))
+            ok = np.roll(solid, (dy, dx), axis=(0, 1))
+            if dy == 1:
+                ok[0, :] = False
+            elif dy == -1:
+                ok[-1, :] = False
+            if dx == 1:
+                ok[:, 0] = False
+            elif dx == -1:
+                ok[:, -1] = False
+            for i in range(n):
+                votes[i] += (ok & (src == i)).astype(np.int16)
+        has_vote = votes.max(axis=0) > 0
+        take = pending & has_vote
+        if original is not None:
+            pal = np.asarray(qimg.palette, dtype=np.float32)
+            pix = original.astype(np.float32)
+            dist = np.stack(
+                [np.abs(pix - pal[i]).sum(axis=2) for i in range(n)]
+            )
+            dist[votes == 0] = np.inf
+            choice = dist.argmin(axis=0)
+        else:
+            choice = votes.argmax(axis=0)
+        labels[take] = choice[take]
+        pending &= ~take
+        moved += int(take.sum())
+    total = max(1, int((labels >= 0).sum()))
+    qimg.coverage = [float((labels == i).sum()) / total for i in range(n)]
+    return moved
+
+
+def majority_smooth(labels: np.ndarray, n: int, passes: int) -> np.ndarray:
+    """3x3 majority filter on a label map: each pixel takes the most
+    common label in its neighbourhood when that label holds at least 5
+    of the 9 cells. Straight runs and corners of real shapes survive;
+    single-pixel notches and spurs along a noisy edge do not."""
+    for _ in range(passes):
+        padded = np.pad(labels, 1, mode="edge")
+        h, w = labels.shape
+        votes = np.zeros((n,) + labels.shape, dtype=np.int8)
+        for dy in range(3):
+            for dx in range(3):
+                window = padded[dy:dy + h, dx:dx + w]
+                for i in range(n):
+                    votes[i] += window == i
+        best = votes.argmax(axis=0)
+        strong = votes.max(axis=0) >= 5
+        labels = np.where(strong & (labels >= 0), best, labels)
+    return labels
 
 
 # ------------------------------------------------------------- tracing
@@ -219,6 +369,47 @@ def douglas_peucker(points: list[Point], epsilon: float) -> list[Point]:
     return [p for p, k in zip(points, keep) if k]
 
 
+def smooth_staircase(points: list[Point], radius: int = 2, min_run: int = 3) -> list[Point]:
+    """Average out pixel stair-steps on a unit-step boundary loop.
+
+    Each vertex moves to the mean of its +-``radius`` neighbours, except
+    genuine corners: a direction change where the straight runs on both
+    sides are at least ``min_run`` px long. Diagonals and curves (short
+    alternating runs) come out as smooth lines; square corners stay put.
+    """
+    n = len(points)
+    if radius <= 0 or n < 2 * radius + 3:
+        return points
+    # Length of the straight run ending at / starting from each vertex.
+    def direction(i: int) -> Point:
+        a, b = points[i], points[(i + 1) % n]
+        return (b[0] - a[0], b[1] - a[1])
+
+    dirs = [direction(i) for i in range(n)]
+
+    def run(start: int, step: int) -> int:
+        # Straight-run length from dirs[start], walking by step (capped).
+        k = 1
+        while k < min_run and dirs[(start + k * step) % n] == dirs[start]:
+            k += 1
+        return k
+
+    out: list[Point] = []
+    for i in range(n):
+        corner = dirs[i] != dirs[i - 1] and run(i - 1, -1) >= min_run and run(i, 1) >= min_run
+        if corner:
+            out.append(points[i])
+            continue
+        xs = ys = 0.0
+        for k in range(-radius, radius + 1):
+            px, py = points[(i + k) % n]
+            xs += px
+            ys += py
+        m = 2 * radius + 1
+        out.append((xs / m, ys / m))
+    return out
+
+
 def simplify_loop(points: list[Point], epsilon: float) -> list[Point]:
     """Simplify a closed loop: collapse collinear runs, rotate to start
     at a feature point, then Douglas-Peucker both halves."""
@@ -255,6 +446,13 @@ def _turn_angle(prev_pt: Point, cur: Point, nxt: Point) -> float:
     return math.degrees(diff)
 
 
+def _clamped_handle(anchor: Point, offset: Point, limit: float) -> Point:
+    length = math.hypot(offset[0], offset[1])
+    if length > limit > 0:
+        offset = (offset[0] * limit / length, offset[1] * limit / length)
+    return (anchor[0] + offset[0], anchor[1] + offset[1])
+
+
 def loop_to_path(points: list[Point], smooth: bool, corner_angle: float) -> str:
     """Serialize one closed loop as SVG path commands."""
     if not points:
@@ -278,14 +476,18 @@ def loop_to_path(points: list[Point], smooth: bool, corner_angle: float) -> str:
         p3 = points[(i + 2) % n]
         # Catmull-Rom tangents; a corner vertex contributes a tangent
         # along its own segment so the edge stays sharp.
+        # Handles are clamped to a third of this segment: next to a much
+        # longer neighbour an unclamped Catmull-Rom tangent overshoots
+        # and leaves a spike past the segment's ends.
+        seg = math.hypot(p2[0] - p1[0], p2[1] - p1[1])
         if corners[i]:
             c1 = (p1[0] + (p2[0] - p1[0]) / 3, p1[1] + (p2[1] - p1[1]) / 3)
         else:
-            c1 = (p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6)
+            c1 = _clamped_handle(p1, ((p2[0] - p0[0]) / 6, (p2[1] - p0[1]) / 6), seg / 3)
         if corners[(i + 1) % n]:
             c2 = (p2[0] - (p2[0] - p1[0]) / 3, p2[1] - (p2[1] - p1[1]) / 3)
         else:
-            c2 = (p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6)
+            c2 = _clamped_handle(p2, (-(p3[0] - p1[0]) / 6, -(p3[1] - p1[1]) / 6), seg / 3)
         cmds.append(
             f"C {c1[0]:.2f} {c1[1]:.2f} {c2[0]:.2f} {c2[1]:.2f} {p2[0]:.2f} {p2[1]:.2f}"
         )
@@ -326,6 +528,8 @@ def _trace_shape(
     loops = trace_mask(mask)
     subpaths = []
     for loop in loops:
+        if options.smooth and options.edge_smoothing > 0:
+            loop = smooth_staircase(loop, options.edge_smoothing)
         pts = simplify_loop(loop, options.simplify_tolerance)
         if len(pts) < 3:
             continue
@@ -435,6 +639,7 @@ def vectorize_file(path: str | Path, options: VectorizeOptions | None = None) ->
     qimg = quantize(img, n_colors=internal_colors)
 
     photo_regions = []
+    doc_blockers: list[str] = []
     if options.hybrid:
         from designer.hybrid import extract_photo_regions, photo_coverage
 
@@ -443,12 +648,27 @@ def vectorize_file(path: str | Path, options: VectorizeOptions | None = None) ->
         if coverage > options.max_photo_coverage and not options.force:
             raise ComplexityError(coverage, options.max_photo_coverage, photographic=True)
         if photo_regions:
+            raw = np.asarray(img.convert("RGB"), dtype=np.uint8)
+            flat_art = [r for r in photo_regions if _is_flat_artwork(qimg.labels, raw, r)]
+            if flat_art:
+                doc_blockers.append(
+                    f"{len(flat_art)} region(s) of flat artwork (likely small or script "
+                    "lettering) could not be traced cleanly and were embedded as raster; "
+                    "the output is not a clean vector. Supply a higher-resolution source "
+                    "or redraw that element"
+                )
             qimg.labels = masked
             total = max(1, int((masked >= 0).sum()))
             qimg.coverage = [
                 float((masked == i).sum()) / total for i in range(len(qimg.palette))
             ]
 
+    # Edge cleanup runs after photo detection (which reads the raw
+    # label noise) and only touches the flat-art pixels left to trace.
+    if options.absorb_fringes:
+        absorb_fringe_pixels(qimg, np.asarray(img.convert("RGB"), dtype=np.uint8))
+    if options.denoise_passes > 0:
+        qimg.labels = majority_smooth(qimg.labels, len(qimg.palette), options.denoise_passes)
     labels = qimg.labels
     flat = labels >= 0
     if flat.sum() > 0:
@@ -487,6 +707,7 @@ def vectorize_file(path: str | Path, options: VectorizeOptions | None = None) ->
         )
     if ocr_note:
         doc.warnings.append(ocr_note)
+    doc.blockers.extend(doc_blockers)
 
     for span in spans:
         attrs = {

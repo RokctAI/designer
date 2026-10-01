@@ -140,7 +140,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
         return 2
     report = engine.audit(doc)
     print(report.to_json() if args.json else report.to_text())
-    return 0 if report.score >= args.min_score else 1
+    return 0 if report.score >= args.min_score and not report.blocked else 1
 
 
 def cmd_comply(args: argparse.Namespace) -> int:
@@ -162,7 +162,7 @@ def cmd_comply(args: argparse.Namespace) -> int:
         print(f"Score before fixes : {before}/100")
         print(f"Score after fixes  : {report.score}/100")
         print(f"Wrote {out}")
-    return 0 if report.score >= args.min_score else 1
+    return 0 if report.score >= args.min_score and not report.blocked else 1
 
 
 def cmd_palette(args: argparse.Namespace) -> int:
@@ -251,6 +251,9 @@ def cmd_formats(args: argparse.Namespace) -> int:
     return 0
 
 
+_FONT_SUBSTITUTE_MARKER = "is not installed; rendered with a substitute"
+
+
 def cmd_render(args: argparse.Namespace) -> int:
     engine = ComplianceEngine(load_system(args.system), format=args.format)
     out = Path(args.output)
@@ -303,12 +306,24 @@ def cmd_render(args: argparse.Namespace) -> int:
         return 2
 
     seen = set()
+    missing_fonts = False
     for doc in docs:
         for warning in doc.warnings:
             if warning not in seen:
                 seen.add(warning)
                 print(f"note: {warning}", file=sys.stderr)
+                missing_fonts = missing_fonts or _FONT_SUBSTITUTE_MARKER in warning
     print(f"Wrote {out}")
+    if missing_fonts and not args.allow_font_substitute:
+        # The design system names its fonts, so they are expected to be
+        # installed; a substitute typeface is not the brand.
+        print(
+            "error: FAILED: a design-system font is not installed, so the output "
+            "uses a substitute typeface (install the font, or pass "
+            "--allow-font-substitute for a draft)",
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 
@@ -405,6 +420,9 @@ def main(argv: list[str] | None = None) -> int:
     _add_format_arg(p)
     _add_system_arg(p)
     _add_vector_args(p)
+    p.add_argument("--allow-font-substitute", action="store_true",
+                   help="exit 0 even when a design-system font is missing and a "
+                        "substitute typeface was used (drafts only)")
     p.set_defaults(func=cmd_render)
 
     args = parser.parse_args(argv)

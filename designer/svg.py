@@ -105,6 +105,10 @@ class Document:
     # findings by the engine.capability rule so audits are never
     # silently blind to what they could not see.
     warnings: list[str] = field(default_factory=list)
+    # Fidelity failures the pipeline detected (flat artwork left as
+    # raster, noisy source). Surfaced as blocking findings: the output
+    # is not a clean deliverable, whatever else scores well.
+    blockers: list[str] = field(default_factory=list)
 
     def gradient_by_ref(self, paint: str | None) -> GradientDef | None:
         """Resolve a fill/stroke value like "url(#g0)" to its def."""

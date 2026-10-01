@@ -19,7 +19,10 @@ AI image  ──►  vectorize  ──►  audit against design system  ──�
   exact pixel boundaries into closed loops, simplifies them
   (Douglas–Peucker) and fits smooth Bézier curves while preserving sharp
   corners. Output is resolution-independent SVG with no external tracer
-  needed.
+  needed. Anti-aliased and JPEG-soft edges are cleaned before tracing:
+  thin blend rims are absorbed into the shapes on either side (no halo
+  outlines), pixel stair-steps are averaged out while square corners
+  stay sharp, and curve handles are clamped so edges never spike.
 - **Gradient reconstruction.** Smooth gradients quantize into stacks of
   color bands; instead of shipping that posterization, the engine
   detects band chains whose colors form a ramp in OKLab, classifies
@@ -83,7 +86,13 @@ AI image  ──►  vectorize  ──►  audit against design system  ──�
   whatever system you load — nothing is hard-coded.
 - **Audit.** Scores any SVG or raster against the system and lists every
   violation with severity (`designer audit design.svg --min-score 90`
-  works as a CI gate).
+  works as a CI gate). Some findings are **blockers**: flat artwork
+  (e.g. small script lettering) that could only be embedded as raster
+  is not a clean vector, so the report reads FAILED, the score is capped
+  at 49 and the CLI exits non-zero whatever `--min-score` says.
+  `designer render` likewise fails when a design-system font is not
+  installed (the system expects its fonts to be available); pass
+  `--allow-font-substitute` for a draft.
 - **Auto-fix.** Snaps every fill/stroke to the perceptually nearest
   brand token **for its role** (a full-bleed background lands on a
   surface color, never a bright accent), merges palettes over the cap, recolors low-contrast text
