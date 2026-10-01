@@ -58,6 +58,9 @@ class Circle:
     sweep: float  # radians of edge this circle follows
 
 
+WARN = "\u26a0 "  # marks a note that breaks common practice; never scored
+
+
 @dataclass
 class Construction:
     box: tuple[float, float, float, float]  # x0, y0, x1, y1 of the artwork
@@ -65,10 +68,13 @@ class Construction:
     verticals: list[tuple[float, int]] = field(default_factory=list)
     circles: list[Circle] = field(default_factory=list)
     ratios: list[tuple[int, int, str]] = field(default_factory=list)  # circle i, j, ratio name
+    canvas: tuple[float, float] | None = None  # doc width, height
 
     def notes(self, width: float | None = None, height: float | None = None) -> list[str]:
         """Plain-language findings, one line each, for the overlay and reports."""
         x0, y0, x1, y1 = self.box
+        if width is None and self.canvas:
+            width, height = self.canvas
         out: list[str] = []
         if width and height:
             dx, dy = (x0 + x1) / 2 - width / 2, (y0 + y1) / 2 - height / 2
@@ -76,17 +82,21 @@ class Construction:
             if abs(dx) < size * 0.01 and abs(dy) < size * 0.01:
                 out.append("Artwork is centred on the canvas.")
             else:
-                out.append(f"Artwork sits {abs(dx):.0f}px {'right' if dx > 0 else 'left'}, "
+                out.append(WARN + f"Artwork sits {abs(dx):.0f}px {'right' if dx > 0 else 'left'}, "
                            f"{abs(dy):.0f}px {'down' if dy > 0 else 'up'} of canvas centre.")
         mid_y, mid_x = (y0 + y1) / 2, (x0 + x1) / 2
-        for y, n in self.horizontals:
+        strong_h = sorted(self.horizontals, key=lambda t: -t[1])[:3]
+        strong_v = sorted([v for v in self.verticals if v[1] >= 3], key=lambda t: -t[1])[:3]
+        for y, n in sorted(strong_h):
             kind = "top line" if y < mid_y else "baseline"
             out.append(f"{n} shapes share a {kind} at y={y:.0f}: consistent height.")
-        for x, n in self.verticals:
+        for x, n in sorted(strong_v):
             kind = "left edge" if x < mid_x else "right edge"
             out.append(f"{n} shapes share a {kind} at x={x:.0f}.")
         if not self.horizontals and not self.verticals:
-            out.append("No shared alignment lines: shapes don't share tops, bases or sides.")
+            out.append(WARN + "No shared alignment lines: shapes don't share tops, bases or sides.")
+        if self.horizontals and not any(y >= mid_y for y, _ in self.horizontals):
+            out.append(WARN + "No shared baseline: letters or shapes sit at different heights.")
         groups: dict[str, list[str]] = {}
         for i, j, name in self.ratios:
             groups.setdefault(name, []).append(f"C{i + 1}/C{j + 1}")
@@ -96,10 +106,13 @@ class Construction:
         if self.ratios:
             out.append("Circles on standard ratios suggest the curves were built, not free-drawn.")
         if self.circles and not self.ratios:
-            out.append("Circles found, but none relate by a standard ratio.")
+            out.append(WARN + "Circles found, but none relate by a standard ratio.")
         if not self.circles:
-            out.append("No construction circles: the curves are free-drawn.")
+            out.append(WARN + "No construction circles: the curves are free-drawn.")
         return out
+
+    def warnings(self, width: float | None = None, height: float | None = None) -> list[str]:
+        return [n for n in self.notes(width, height) if n.startswith(WARN)]
 
     def to_text(self) -> str:
         x0, y0, x1, y1 = self.box
@@ -251,7 +264,8 @@ def construct(doc: Document, max_circles: int = 6) -> Construction:
         bottoms.append(by)
         lefts.append(lx)
         rights.append(rx)
-    result = Construction(box=(float(x0), float(y0), float(x1), float(y1)))
+    result = Construction(box=(float(x0), float(y0), float(x1), float(y1)),
+                          canvas=(doc.width, doc.height))
     result.horizontals = _cluster(tops + bottoms, tol)
     result.verticals = _cluster(lefts + rights, tol)
 
@@ -329,7 +343,9 @@ def overlay(doc: Document, con: Construction) -> Document:
                                  "y2": f"{doc.height:.2f}", "stroke": GUIDE, "stroke-width": hair}))
     label(fs * 0.6, top, "Construction notes (informational, not scored)", scale=1.1)
     for k, n in enumerate(notes, 1):
-        label(fs * 0.6, top + k * line_h, n, color="#333333")
+        warn = n.startswith(WARN)
+        label(fs * 0.6, top + k * line_h, ("! " + n[len(WARN):]) if warn else n,
+              color="#d35400" if warn else "#333333")
     return Document(width=doc.width, height=doc.height + line_h * (len(notes) + 1.5), shapes=shapes, defs=list(doc.defs),
                     raw_defs=list(doc.raw_defs), source=doc.source)
 
