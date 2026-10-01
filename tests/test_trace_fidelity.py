@@ -124,3 +124,25 @@ def test_soft_source_warns_and_very_soft_blocks(tmp_path):
     very = vectorize_file(_soft_logo(tmp_path / "c.png", blur=6.0), VectorizeOptions(extract_text=False))
     assert any("soft" in w for w in soft.warnings) or any("soft" in b for b in soft.blockers)
     assert any("too soft" in b for b in very.blockers)
+
+
+def test_print_pdf_carries_control_strip_and_job_colours(tmp_path):
+    import zlib, re
+    from designer.render import render_pdf
+    from designer.svg import Document, Shape
+    from designer.formats import get_format
+
+    doc = Document(width=1000, height=600, shapes=[
+        Shape("rect", {"x": "0", "y": "0", "width": "1000", "height": "600", "fill": "#049dd9"}),
+        Shape("rect", {"x": "20", "y": "20", "width": "50", "height": "50", "fill": "#8e1f75"}),
+    ])
+    out = render_pdf(doc, tmp_path / "p.pdf", cmyk=True, bleed=3.0, marks=True,
+                     format=get_format("a4-poster"))
+    data = out.read_bytes()
+    streams = b"".join(
+        zlib.decompress(m) for m in re.findall(rb"stream\r?\n(.*?)\r?\nendstream", data, re.S)
+        if m[:2] in (b"x\x9c", b"x\xda", b"x^")
+    )
+    assert b"1.00 0.00 0.00 0.00 k" in streams  # solid cyan patch
+    assert b"0.50 0.40 0.40 0.00 k" in streams  # three-colour grey
+    assert b"#049dd9" in streams and b"#8e1f75" in streams

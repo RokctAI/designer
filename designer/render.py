@@ -323,6 +323,10 @@ class _PdfFont:
     obj: int = 0
 
 
+def _hex(rgb: RGB) -> str:
+    return "#{:02x}{:02x}{:02x}".format(*rgb)
+
+
 def _pdf_escape(text: str) -> bytes:
     encoded = text.encode("cp1252", errors="replace")
     out = bytearray()
@@ -640,39 +644,110 @@ class _PdfWriter:
             ops.append("Q")
         ops.append("Q")
 
+        ops.extend(self._control_strip_ops(reg_fill))
         ops.extend(self._slug_ops(reg_fill))
         return ops
 
-    def _slug_ops(self, reg_fill: str) -> list[str]:
-        """Job slug line: filename, date, colorspace — bottom-left slug."""
-        import datetime
-
-        doc = self.doc
-        name = Path(doc.source).name if doc.source else "untitled"
-        text = (
-            f"{name}  |  {datetime.date.today().isoformat()}  |  "
-            f"{self._colorspace_label()}"
-        )
+    def _slug_font(self) -> "_PdfFont | None":
         family = first_family("sans-serif") or "sans-serif"
         key = f"{family}:r"
         if key not in self.fonts:
             path, _ = resolve_with_fallback(family, bold=False)
             if not path:
-                return []
+                return None
             self.fonts[key] = _PdfFont(name=f"F{len(self.fonts)}", path=path)
-        font = self.fonts[key]
-        size = self._mm(2.5)
-        y = doc.height + self.bleed + self._mm(8.8)
+        return self.fonts[key]
+
+    def _text_op(self, font: "_PdfFont", size: float, x: float, y: float, text: str) -> list[str]:
         return [
-            "q",
             "BT",
-            reg_fill,
             f"/{font.name} {size:.3f} Tf",
-            f"1 0 0 -1 0 {y:.3f} Tm",
+            f"1 0 0 -1 {x:.3f} {y:.3f} Tm",
             f"({_pdf_escape(text).decode('latin-1')}) Tj",
             "ET",
-            "Q",
         ]
+
+    def _used_colors(self) -> list[RGB]:
+        """Distinct solid fill/stroke colours in the artwork, in paint order."""
+        seen: list[RGB] = []
+        for shape in self.doc.shapes:
+            for attr in ("fill", "stroke"):
+                rgb = parse_color(shape.get(attr) or "")
+                if rgb and rgb not in seen:
+                    seen.append(rgb)
+        return seen
+
+    def _used_fonts(self) -> list[str]:
+        fonts: list[str] = []
+        for shape in self.doc.shapes:
+            if shape.tag == "text" and shape.text:
+                family = first_family(shape.get("font-family"))
+                if family and family not in fonts:
+                    fonts.append(family)
+        return fonts
+
+    def _slug_ops(self, reg_fill: str) -> list[str]:
+        """Job slug line (bottom slug): filename, date, colour space, plus
+        the colours and fonts the artwork uses, as on a job ticket."""
+        import datetime
+
+        doc = self.doc
+        name = Path(doc.source).name if doc.source else "untitled"
+        parts = [name, datetime.date.today().isoformat(), self._colorspace_label()]
+        colors = self._used_colors()
+        if colors:
+            parts.append("Colours: " + ", ".join(_hex(c) for c in colors))
+        fonts = self._used_fonts()
+        if fonts:
+            parts.append("Fonts: " + ", ".join(fonts))
+        font = self._slug_font()
+        if font is None:
+            return []
+        y = doc.height + self.bleed + self._mm(8.8)
+        return ["q", reg_fill, *self._text_op(font, self._mm(2.5), 0.0, y, "  |  ".join(parts)), "Q"]
+
+    def _control_strip_ops(self, reg_fill: str) -> list[str]:
+        """Colour control bar in the top slug, as on a press sheet:
+        unlabelled solid and 50% patches of each process ink plus a
+        three-colour grey (for the printer's densitometer), then one
+        patch per artwork colour labelled with its value."""
+        mm = self._mm
+        size = mm(4.0)
+        top = -(self.bleed + mm(9.0))
+        x = mm(3.0)
+        limit = self.doc.width / 2 - mm(5.0)  # stop short of the registration mark
+        process = [(1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1),
+                   (0.5, 0, 0, 0), (0, 0.5, 0, 0), (0, 0, 0.5, 0), (0, 0, 0, 0.5),
+                   (0.5, 0.4, 0.4, 0)]
+        ops = ["q"]
+        for c, m, y, k in process:
+            if x + size > limit:
+                return ops + ["Q"]
+            if self.cmyk:
+                ops.append(f"{c:.2f} {m:.2f} {y:.2f} {k:.2f} k")
+            else:
+                r, g, b = ((1 - c) * (1 - k), (1 - m) * (1 - k), (1 - y) * (1 - k))
+                ops.append(f"{r:.4f} {g:.4f} {b:.4f} rg")
+            ops.append(f"{x:.3f} {top:.3f} {size:.3f} {size:.3f} re f")
+            x += size
+        font = self._slug_font()
+        x += mm(2.0)
+        for rgb in self._used_colors():
+            if min(rgb) >= 250:
+                continue  # paper white: nothing to measure
+            if x + size > limit:
+                break
+            ops += [self._fill_op(rgb), f"{x:.3f} {top:.3f} {size:.3f} {size:.3f} re f"]
+            if font is not None:
+                label = _hex(rgb)
+                if self.cmyk:
+                    c, m, y, k = self._to_cmyk(rgb)
+                    label += f" C{c * 100:.0f} M{m * 100:.0f} Y{y * 100:.0f} K{k * 100:.0f}"
+                ops += ["q", reg_fill,
+                        *self._text_op(font, mm(1.4), x, top + size + mm(1.6), label), "Q"]
+            x += mm(26.0) if self.cmyk else mm(11.0)
+        ops.append("Q")
+        return ops
 
     def _colorspace_label(self) -> str:
         if not self.cmyk:

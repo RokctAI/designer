@@ -55,7 +55,9 @@ AI image  ──►  vectorize  ──►  audit against design system  ──�
 - **Press-ready PDF geometry.** For print formats with a bleed, the
   page grows to trim + bleed + slug and the PDF carries crop marks,
   registration marks (drawn on every separation in CMYK), dashed fold
-  marks at panel boundaries, a job slug line, and proper
+  marks at panel boundaries, a colour control strip (solid and 50%
+  CMYK patches, a three-colour grey, and a labelled patch per artwork
+  colour), a job slug line listing the colours and fonts used, and proper
   MediaBox/TrimBox/BleedBox (`--marks/--no-marks`). Several inputs
   make one multi-page PDF: `designer render front.svg back.svg -o
   board.pdf` for double-sided boards and folded pieces.
