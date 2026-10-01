@@ -19,7 +19,10 @@ AI image  ──►  vectorize  ──►  audit against design system  ──�
   exact pixel boundaries into closed loops, simplifies them
   (Douglas–Peucker) and fits smooth Bézier curves while preserving sharp
   corners. Output is resolution-independent SVG with no external tracer
-  needed.
+  needed. Anti-aliased and JPEG-soft edges are cleaned before tracing:
+  thin blend rims are absorbed into the shapes on either side (no halo
+  outlines), pixel stair-steps are averaged out while square corners
+  stay sharp, and curve handles are clamped so edges never spike.
 - **Gradient reconstruction.** Smooth gradients quantize into stacks of
   color bands; instead of shipping that posterization, the engine
   detects band chains whose colors form a ramp in OKLab, classifies
@@ -52,7 +55,9 @@ AI image  ──►  vectorize  ──►  audit against design system  ──�
 - **Press-ready PDF geometry.** For print formats with a bleed, the
   page grows to trim + bleed + slug and the PDF carries crop marks,
   registration marks (drawn on every separation in CMYK), dashed fold
-  marks at panel boundaries, a job slug line, and proper
+  marks at panel boundaries, a colour control strip (solid and 50%
+  CMYK patches, a three-colour grey, and a labelled patch per artwork
+  colour), a job slug line listing the colours and fonts used, and proper
   MediaBox/TrimBox/BleedBox (`--marks/--no-marks`). Several inputs
   make one multi-page PDF: `designer render front.svg back.svg -o
   board.pdf` for double-sided boards and folded pieces.
@@ -83,7 +88,15 @@ AI image  ──►  vectorize  ──►  audit against design system  ──�
   whatever system you load — nothing is hard-coded.
 - **Audit.** Scores any SVG or raster against the system and lists every
   violation with severity (`designer audit design.svg --min-score 90`
-  works as a CI gate).
+  works as a CI gate). Some findings are **blockers**: flat artwork
+  (e.g. small script lettering) that could only be embedded as raster
+  is not a clean vector, so the report reads FAILED, the score is capped
+  at 49 and the CLI exits non-zero whatever `--min-score` says.
+  `designer render` likewise fails when a design-system font is not
+  installed (the system expects its fonts to be available); pass
+  `--allow-font-substitute` for a draft. Source sharpness is measured
+  too (median edge width): soft input (typical AI output, ~3-4px) is a
+  warning; a blurry source (over 4.5px, e.g. a photo of a logo) blocks.
 - **Auto-fix.** Snaps every fill/stroke to the perceptually nearest
   brand token **for its role** (a full-bleed background lands on a
   surface color, never a bright accent), merges palettes over the cap, recolors low-contrast text
@@ -224,11 +237,53 @@ accessibility:
 | `print.hairline` | strokes survive the press (print formats) | raise to the press minimum |
 | `print.bleed` | edge artwork extends past trim (print formats) | extend into the bleed |
 | `print.ink` | total ink within the press limit (print formats) | report only |
+| `print.rich_black` | small text / thin lines in black use 100% K, not rich black | sets `#000000` |
+| `print.image_ppi` | placed images reach 300 ppi at print size | report only |
 | `geometry.transform` | flags transforms that couldn't be baked | report only |
 | `engine.capability` | constructs the audit couldn't evaluate are reported | report only |
 
 All color math runs in **OKLab**, so "nearest color" matches human
 perception, and contrast checks implement **WCAG 2.x** exactly.
+
+## Print shop
+
+```bash
+designer preflight client.pdf                    # fonts, bleed, image ppi, RGB, ink; exit 1 on blockers
+designer impose card.pdf -o sheet.pdf --sheet SRA3 --quantity 500
+designer ticket logo.svg -o ticket.pdf --client Acme --quantity 500 --stock "350gsm matt"
+designer proof logo.svg -o proof.pdf --client Acme --approve-url https://.../review/TOKEN
+designer hotfolder inbox/ outbox/ --format business-card --sheet SRA3 --watch
+```
+
+Python: `designer.preflight.preflight_pdf`, `designer.impose.impose_pdf` /
+`plan`, `designer.production.job_ticket` / `proof`,
+`designer.hotfolder.process_folder`. The studio Frappe fragment exposes
+all of them to the Next.js frontend (`api.print_shop.*`, see
+docs/FRONTEND_SPEC.md §2.4), including emailing proofs for client sign-off.
+
+## Black overprint
+
+CMYK PDFs overprint 100% K fills and strokes by default, so a slightly
+mis-registered plate can't leave a white halo round black type. Turn it off
+with `--no-overprint-black` or `render_pdf(..., overprint_black=False)`.
+
+## Construction guides
+
+Draws the bounding box, shared alignment lines, best-fit circles and named
+size ratios over a logo, to check it against construction rules. It is
+informational only and never changes a score. Off by default; turn it on per call:
+
+```bash
+designer construct logo.svg -o guides.svg          # guides + text summary
+designer render logo.svg -o logo.png --construction
+designer comply logo.svg --construction            # also writes *.construction.svg
+```
+
+```python
+from designer.construct import construct, with_construction
+render_png(doc, "logo.png", construction=True)    # render_pdf takes it too
+guided = with_construction(doc, on=True)
+```
 
 ## Python API
 

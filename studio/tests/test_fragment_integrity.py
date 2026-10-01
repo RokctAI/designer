@@ -102,8 +102,9 @@ def test_every_whitelisted_method_resolves_and_is_whitelisted():
 
 def test_scheduler_events_resolve():
     events = TENANT_HOOKS["scheduler_events"]
-    assert set(events) == {"daily", "hourly"}
+    assert set(events) == {"daily", "hourly", "all"}
     assert len(events["daily"]) == 2 and len(events["hourly"]) == 1
+    assert len(events["all"]) == 1  # hot folder pass
     for paths in events.values():
         for dotted in paths:
             func, _ = _resolve(dotted)

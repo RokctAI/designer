@@ -140,7 +140,117 @@ def cmd_audit(args: argparse.Namespace) -> int:
         return 2
     report = engine.audit(doc)
     print(report.to_json() if args.json else report.to_text())
-    return 0 if report.score >= args.min_score else 1
+    return 0 if report.score >= args.min_score and not report.blocked else 1
+
+
+def cmd_construct(args: argparse.Namespace) -> int:
+    from designer.construct import construct, overlay
+
+    engine = ComplianceEngine(load_system(args.system))
+    try:
+        doc = engine.load(args.input, _vector_options(args))
+    except (ComplexityError, InvalidImageError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    con = construct(doc)
+    print(con.to_text())
+    if args.output:
+        save(overlay(doc, con), args.output)
+        print(f"Wrote {args.output}")
+    return 0  # informational: never fails a design
+
+
+def _job_from_args(args: argparse.Namespace):
+    from designer.production import Job
+
+    return Job(job_no=getattr(args, "job_no", "") or "", client=getattr(args, "client", "") or "",
+               title=getattr(args, "title", "") or "", quantity=getattr(args, "quantity", None),
+               stock=getattr(args, "stock", "") or "", finish=getattr(args, "finish", "") or "",
+               size=getattr(args, "size", "") or "", due=getattr(args, "due", "") or "",
+               notes=getattr(args, "notes", "") or "")
+
+
+def cmd_preflight(args: argparse.Namespace) -> int:
+    from designer.preflight import preflight_pdf
+
+    report = preflight_pdf(args.input, min_ppi=args.min_ppi, max_ink=args.max_ink,
+                           min_bleed_mm=args.bleed_mm)
+    print(report.to_json() if args.json else report.to_text())
+    return 1 if report.blocked else 0
+
+
+def cmd_impose(args: argparse.Namespace) -> int:
+    from designer.impose import impose_pdf
+
+    sheet = args.sheet
+    if "x" in sheet and sheet not in ("12x18", "13x19"):
+        w, h = sheet.lower().split("x")
+        sheet = (float(w), float(h))
+    try:
+        layout = impose_pdf(args.input, args.output, sheet=sheet, quantity=args.quantity,
+                            gap_mm=args.gap, margin_mm=args.margin, marks=not args.no_marks)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    msg = (f"{layout.cols} x {layout.rows} = {layout.per_sheet} up on {layout.sheet}"
+           f"{' (rotated)' if layout.rotated else ''}, {layout.usage * 100:.0f}% of sheet used")
+    if args.quantity:
+        msg += f"; {args.quantity} copies = {layout.sheets_for(args.quantity)} sheets"
+    print(msg)
+    print(f"Wrote {args.output}")
+    return 0
+
+
+def _load_for_paper(args):
+    engine = ComplianceEngine(load_system(args.system), format=getattr(args, "format", None))
+    return engine, [engine.load(src, _vector_options(args)) for src in args.input]
+
+
+def cmd_ticket(args: argparse.Namespace) -> int:
+    from designer.production import job_ticket
+
+    try:
+        engine, docs = _load_for_paper(args)
+    except (ComplexityError, InvalidImageError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    report = engine.audit(docs[0])
+    job_ticket(docs[0], args.output, _job_from_args(args), report=report)
+    print(f"Wrote {args.output}")
+    return 0
+
+
+def cmd_proof(args: argparse.Namespace) -> int:
+    from designer.production import proof
+
+    try:
+        _, docs = _load_for_paper(args)
+    except (ComplexityError, InvalidImageError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    proof(docs, args.output, _job_from_args(args), approve_url=args.approve_url or "")
+    print(f"Wrote {args.output}")
+    return 0
+
+
+def cmd_hotfolder(args: argparse.Namespace) -> int:
+    import time
+
+    from designer.hotfolder import process_folder
+
+    kwargs = dict(system=load_system(args.system), format=args.format, sheet=args.sheet,
+                  job=_job_from_args(args))
+    failed = 0
+    while True:
+        for res in process_folder(args.inbox, args.outbox, **kwargs):
+            failed += not res.passed
+            mark = "PASS" if res.passed else "FAIL"
+            print(f"{mark} {res.source} ({res.score}/100)")
+            for problem in res.problems[:5]:
+                print(f"     - {problem}")
+        if not args.watch:
+            return 1 if failed else 0
+        time.sleep(args.interval)
 
 
 def cmd_comply(args: argparse.Namespace) -> int:
@@ -154,6 +264,11 @@ def cmd_comply(args: argparse.Namespace) -> int:
     report = engine.comply(doc)
     out = Path(args.output) if args.output else _default_output(args.input, ".compliant.svg")
     save(doc, out)
+    if args.construction:
+        from designer.construct import construct, overlay
+        con = construct(doc)
+        guides = out.with_name(out.stem + ".construction.svg")
+        save(overlay(doc, con), guides)
     if args.json:
         print(report.to_json())
     else:
@@ -162,7 +277,11 @@ def cmd_comply(args: argparse.Namespace) -> int:
         print(f"Score before fixes : {before}/100")
         print(f"Score after fixes  : {report.score}/100")
         print(f"Wrote {out}")
-    return 0 if report.score >= args.min_score else 1
+        if args.construction:
+            print()
+            print(con.to_text())
+            print(f"Wrote {guides}")
+    return 0 if report.score >= args.min_score and not report.blocked else 1
 
 
 def cmd_palette(args: argparse.Namespace) -> int:
@@ -251,6 +370,9 @@ def cmd_formats(args: argparse.Namespace) -> int:
     return 0
 
 
+_FONT_SUBSTITUTE_MARKER = "is not installed; rendered with a substitute"
+
+
 def cmd_render(args: argparse.Namespace) -> int:
     engine = ComplianceEngine(load_system(args.system), format=args.format)
     out = Path(args.output)
@@ -286,6 +408,8 @@ def cmd_render(args: argparse.Namespace) -> int:
         render_pdf(
             docs if len(docs) > 1 else doc, out, dpi=args.dpi, cmyk=args.cmyk,
             format=spec, bleed=bleed, marks=marks, icc_profile=icc,
+            construction=args.construction,
+            overprint_black=args.overprint_black,
         )
     elif suffix in (".png", ".jpg", ".jpeg"):
         image = render_png(
@@ -294,21 +418,35 @@ def cmd_render(args: argparse.Namespace) -> int:
             width=args.width,
             dpi=args.dpi if not args.width else None,
             background=args.background,
+            construction=args.construction,
         )
         image.save(str(out))
     elif suffix == ".svg":
-        save(doc, out)
+        from designer.construct import with_construction
+        save(with_construction(doc, args.construction), out)
     else:
         print(f"error: unsupported output type {suffix!r}", file=sys.stderr)
         return 2
 
     seen = set()
+    missing_fonts = False
     for doc in docs:
         for warning in doc.warnings:
             if warning not in seen:
                 seen.add(warning)
                 print(f"note: {warning}", file=sys.stderr)
+                missing_fonts = missing_fonts or _FONT_SUBSTITUTE_MARKER in warning
     print(f"Wrote {out}")
+    if missing_fonts and not args.allow_font_substitute:
+        # The design system names its fonts, so they are expected to be
+        # installed; a substitute typeface is not the brand.
+        print(
+            "error: FAILED: a design-system font is not installed, so the output "
+            "uses a substitute typeface (install the font, or pass "
+            "--allow-font-substitute for a draft)",
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 
@@ -320,6 +458,72 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--version", action="version", version=f"designer {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser(
+        "construct",
+        help="draw the construction grid (alignment lines, circles, ratios) over a logo; "
+             "report only, never fails",
+    )
+    p.add_argument("input")
+    p.add_argument("--output", "-o", default=None, help="overlay SVG to write")
+    _add_system_arg(p)
+    _add_vector_args(p)
+    p.set_defaults(func=cmd_construct)
+
+    def _job_args(p):
+        for flag in ("--job-no", "--client", "--title", "--stock", "--finish", "--size",
+                     "--due", "--notes"):
+            p.add_argument(flag, default="")
+        p.add_argument("--quantity", type=int, default=None)
+
+    p = sub.add_parser("preflight", help="check a client PDF for press (fonts, bleed, "
+                       "image ppi, RGB, ink); exits 1 on blockers")
+    p.add_argument("input")
+    p.add_argument("--min-ppi", type=float, default=300.0)
+    p.add_argument("--max-ink", type=float, default=300.0, help="total ink limit, %%")
+    p.add_argument("--bleed-mm", type=float, default=3.0)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_preflight)
+
+    p = sub.add_parser("impose", help="step a one-page print PDF n-up across a press sheet")
+    p.add_argument("input", help="single-page PDF with a TrimBox (e.g. from render --marks)")
+    p.add_argument("--output", "-o", required=True)
+    p.add_argument("--sheet", default="SRA3", help="SRA3, SRA4, A3, A4, 12x18, 13x19 or WxH mm")
+    p.add_argument("--quantity", type=int, default=None)
+    p.add_argument("--gap", type=float, default=None, help="gutter mm (default: 2 x bleed)")
+    p.add_argument("--margin", type=float, default=10.0, help="gripper margin mm")
+    p.add_argument("--no-marks", action="store_true")
+    p.set_defaults(func=cmd_impose)
+
+    p = sub.add_parser("ticket", help="one-page A4 job ticket PDF for the press operator")
+    p.add_argument("input", nargs=1)
+    p.add_argument("--output", "-o", required=True)
+    _job_args(p)
+    _add_format_arg(p)
+    _add_system_arg(p)
+    _add_vector_args(p)
+    p.set_defaults(func=cmd_ticket)
+
+    p = sub.add_parser("proof", help="watermarked low-res client proof PDF with sign-off block")
+    p.add_argument("input", nargs="+")
+    p.add_argument("--output", "-o", required=True)
+    p.add_argument("--approve-url", default="", help="online approval link to print on the proof")
+    _job_args(p)
+    _add_system_arg(p)
+    _add_vector_args(p)
+    p.set_defaults(func=cmd_proof)
+
+    p = sub.add_parser("hotfolder", help="process every file in an inbox: client PDFs are "
+                       "preflighted, artwork is complied and rendered print-ready")
+    p.add_argument("inbox")
+    p.add_argument("outbox")
+    p.add_argument("--sheet", default=None, help="also impose onto this sheet (e.g. SRA3)")
+    p.add_argument("--watch", action="store_true", help="keep watching the inbox")
+    p.add_argument("--interval", type=float, default=5.0, help="seconds between passes")
+    _job_args(p)
+    _add_format_arg(p)
+    _add_system_arg(p)
+    p.set_defaults(func=cmd_hotfolder)
 
     p = sub.add_parser("vectorize", help="convert a raster design to clean SVG")
     p.add_argument("input")
@@ -349,6 +553,9 @@ def main(argv: list[str] | None = None) -> int:
         "--min-score", type=float, default=0.0, metavar="N",
         help="exit non-zero if the post-fix score is below N",
     )
+    p.add_argument("--construction", action=argparse.BooleanOptionalAction, default=False,
+                   help="draw construction guides (box, alignment lines, circles); "
+                   "informational, never affects the score (default: off)")
     _add_system_arg(p)
     _add_vector_args(p)
     p.set_defaults(func=cmd_comply)
@@ -398,13 +605,22 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--marks", action=argparse.BooleanOptionalAction, default=None,
                    help="PDF only: draw crop/registration marks and a job slug "
                    "(default: on for print formats with --cmyk or a bleed)")
+    p.add_argument("--overprint-black", action=argparse.BooleanOptionalAction, default=True,
+                   help="PDF --cmyk only: 100%% K fills and strokes overprint, so "
+                   "mis-registration can't halo black (default: on)")
     p.add_argument("--background", default="#ffffff",
                    help="PNG only: canvas color behind the design")
     p.add_argument("--comply", action="store_true",
                    help="enforce the design system before rendering")
+    p.add_argument("--construction", action=argparse.BooleanOptionalAction, default=False,
+                   help="draw construction guides (box, alignment lines, circles); "
+                   "informational, never affects the score (default: off)")
     _add_format_arg(p)
     _add_system_arg(p)
     _add_vector_args(p)
+    p.add_argument("--allow-font-substitute", action="store_true",
+                   help="exit 0 even when a design-system font is missing and a "
+                        "substitute typeface was used (drafts only)")
     p.set_defaults(func=cmd_render)
 
     args = parser.parse_args(argv)

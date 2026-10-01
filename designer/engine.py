@@ -27,7 +27,7 @@ from designer.formats import FormatSpec, get_format
 from designer.report import Report
 from designer.rules import DEFAULT_RULES, Rule
 from designer.rules.format_rules import CanvasFormatRule, MinTextSizeRule, SafeMarginRule
-from designer.rules.print_rules import BleedRule, InkCoverageRule, PrintStrokeRule
+from designer.rules.print_rules import BleedRule, InkCoverageRule, ImageResolutionRule, PrintStrokeRule, RichBlackRule
 from designer.svg import Document, parse_svg
 from designer.tokens import DesignSystem
 from designer.vectorize import VectorizeOptions, vectorize_file
@@ -62,6 +62,8 @@ class ComplianceEngine:
                     PrintStrokeRule(format),
                     BleedRule(format),
                     InkCoverageRule(format),
+                    RichBlackRule(format),
+                    ImageResolutionRule(format),
                 ]
         self.rules = base
 

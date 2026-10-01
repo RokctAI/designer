@@ -239,8 +239,12 @@ system** — that's the whole trick:
   returns the canonical SVG + new score; editor swaps its state to the
   returned SVG. Revision history panel from Design Candidate Revisions
   with one-click restore.
-- Download: SVG (direct), PNG via `render_png` (fall back to client
-  canvas rasterization if the server returns 501).
+- Download: SVG (direct), PNG via `print_shop.render_preview` (fall
+  back to client canvas rasterization if the server returns 501).
+- **Construction guides toggle** (off by default): fetches
+  `print_shop.get_construction` once and layers its `overlay_svg` over
+  the stage; a side panel lists `notes`, with `warnings` (⚠) in amber.
+  Informational only — never blocks save or approval.
 
 Post-OCR nuance to handle in the editor: the real brand font's metrics
 differ from the hallucinated font's, so replaced text can run wider or
@@ -249,6 +253,48 @@ inline-edit + grid-snap drag covers the manual fix; a "fit to width"
 button (binary-search font-size within the type scale until the text
 fits its original box width, measured via `getComputedTextLength`) is a
 cheap, high-value addition — put it in F2.
+
+### 2.4 Print shop (prepress, production, client sign-off)
+
+Every print-shop feature of the engine is reachable through the gateway
+(`{"cmd": "api.print_shop.<method>", "payload": {...}}`). No Desk UI.
+
+**`/studio/print` — print jobs board.** List Design Print Jobs by
+status. A job page has quantity, stock, due date, press sheet
+(`list_sheets` drives the select) and one button, **Make press-ready**
+→ `prepare_print_job(print_job, sheet, quantity)` → returns
+`press_pdf` (CMYK, bleed, crop/registration marks, colour strip, black
+overprint), `imposed_pdf`, `ticket_pdf` and `layout`
+(`cols x rows = per_sheet up`, `sheets`, `usage`). Show the layout as a
+sheet diagram and the three downloads.
+
+**`/studio/preflight` — client files.** Upload a client PDF (standard
+Frappe upload) → `preflight_upload(file_url)` → render `blocked`,
+`score` and `findings` (BLOCKER red, WARNING amber). When not
+blocked, offer **Impose** → `impose_upload(file_url, sheet, quantity)`.
+
+**Proof and sign-off** (candidate gallery and print job pages).
+`create_approval_link(candidate)` → then either **Download proof**
+(`create_proof(approval)`) or **Email proof**
+(`send_proof(approval, recipients, message)`): the client gets the
+watermarked low-res proof PDF attached plus the review link.
+
+**`/studio/review/[token]` — public review page** (no login; the
+link in proof emails, from Design Studio Settings
+`review_url_template`). `get_review(token)` shows the design;
+Approve / Reject / Request changes → `submit_review(token, decision,
+comment)`. Approval selects the candidate and delivers the request.
+
+**`/studio/settings/hot-folder`.** Edit the hot-folder fields on
+Design Studio Settings (inbox/outbox paths on the server, sheet,
+format, design system, enabled). **Run now** → `run_hot_folder`;
+results table from `get_hot_folder_status().last_run` (file, PASS/FAIL,
+score, problems, outputs). Enabled folders also run on the scheduler.
+
+**Other engine features**: `render_pages(candidates)` (front/back or
+folded panels as one PDF), `brandbook(design_system, logo_file_url)`
+(brand manual PDF), `render_deliverable(..., marks, overprint_black,
+construction)`.
 
 ### 2.3 Components worth naming
 

@@ -182,3 +182,98 @@ class InkCoverageRule(Rule):
                     )
                 )
         return findings
+
+
+class RichBlackRule(Rule):
+    """Fine black detail must be single-ink black. Rich black (K plus
+    C/M/Y) on small text or thin strokes blurs and haloes when the
+    plates mis-register; 100% K also overprints cleanly."""
+
+    id = "print.rich_black"
+    description = "Small text and thin lines in black must use 100% K only"
+    SMALL_TEXT_PX = 24.0
+    THIN_STROKE_PX = 3.0
+
+    def __init__(self, spec: FormatSpec):
+        self.spec = spec
+
+    def run(self, doc: Document, system: DesignSystem, autofix: bool) -> list[Finding]:
+        if self.spec.category != "print":
+            return []
+        findings = []
+        for i, shape in enumerate(doc.shapes):
+            checks = []
+            if shape.tag == "text":
+                if (shape.numeric("font-size") or 16.0) < self.SMALL_TEXT_PX:
+                    checks.append("fill")
+            stroke_w = shape.numeric("stroke-width")
+            if (stroke_w if stroke_w is not None else 1.0) < self.THIN_STROKE_PX:
+                checks.append("stroke")
+            for prop in checks:
+                rgb = parse_color(shape.get(prop) or "")
+                if rgb is None:
+                    continue
+                c, m, y, k = rgb_to_cmyk(rgb)
+                if k < 0.9 or c + m + y < 0.05:
+                    continue
+                finding = Finding(
+                    rule=self.id,
+                    severity=Severity.WARNING,
+                    message=(
+                        f"{prop} {shape.get(prop)} is a rich black on fine detail "
+                        f"(C{c * 100:.0f} M{m * 100:.0f} Y{y * 100:.0f} K{k * 100:.0f}) "
+                        "— it blurs if plates mis-register. Use 100% K (#000000)."
+                    ),
+                    shape_index=i,
+                )
+                if autofix:
+                    shape.set(prop, "#000000")
+                    finding.fixed = True
+                    finding.fix_description = f"{prop} -> #000000 (100% K)"
+                findings.append(finding)
+        return findings
+
+
+class ImageResolutionRule(Rule):
+    """Placed photos below the press resolution print soft or pixelated."""
+
+    id = "print.image_ppi"
+    description = "Placed raster images must reach the press resolution"
+    MIN_PPI = 300.0  # offset/digital standard; large formats use their own dpi
+
+    def __init__(self, spec: FormatSpec):
+        self.spec = spec
+
+    def run(self, doc: Document, system: DesignSystem, autofix: bool) -> list[Finding]:
+        if self.spec.category != "print":
+            return []
+        from pathlib import Path
+
+        from designer.render import _decode_href
+
+        target = self.MIN_PPI if self.spec.dpi <= 96 else min(self.MIN_PPI, self.spec.dpi)
+        base_dir = Path(doc.source).parent if doc.source else None
+        findings = []
+        for i, shape in enumerate(doc.shapes):
+            if shape.tag != "image":
+                continue
+            href = shape.get("href") or shape.get("xlink:href") or ""
+            img = _decode_href(href, base_dir)
+            w = shape.numeric("width")
+            if img is None or not w:
+                continue
+            inches = w / self.spec.dpi
+            ppi = img.width / inches
+            if ppi >= target * 0.98:
+                continue
+            findings.append(Finding(
+                rule=self.id,
+                severity=Severity.WARNING,
+                message=(
+                    f"image is {ppi:.0f} ppi at print size, below {target:.0f} ppi "
+                    f"— it will print soft. Supply a {img.width * target / ppi:.0f}px-wide "
+                    "original or place it smaller."
+                ),
+                shape_index=i,
+            ))
+        return findings

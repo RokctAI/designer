@@ -53,3 +53,21 @@ def token_expired(expires_on: datetime | None, now: datetime) -> bool:
 
 def is_valid_decision(decision: str) -> bool:
     return decision in REVIEW_DECISIONS
+
+
+def proof_email_html(message: str | None, review_url: str, title: str = "") -> str:
+    """Body of the proof email: the sender's note, then the approve link.
+    Escapes user text; the link is the only markup."""
+    from html import escape
+
+    note = escape(message or "Please find your proof attached for approval.")
+    note = note.replace("\n", "<br>")
+    what = f" for <b>{escape(title)}</b>" if title else ""
+    return (
+        f"<p>{note}</p>"
+        f"<p>Review your proof{what} and approve it, reject it or request "
+        f"changes online:</p>"
+        f'<p><a href="{escape(review_url, quote=True)}">Open the proof</a></p>'
+        "<p>Please check spelling, numbers, contact details, colours and layout. "
+        "Printing starts only after approval.</p>"
+    )
