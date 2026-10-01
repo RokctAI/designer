@@ -47,7 +47,11 @@
           "{app_name}.api.print_shop.get_hot_folder_status": "{app_name}.studio.tenant.api.print_shop.get_hot_folder_status",
           "{app_name}.api.print_shop.render_preview": "{app_name}.studio.tenant.api.print_shop.render_preview",
           "{app_name}.api.print_shop.render_pages": "{app_name}.studio.tenant.api.print_shop.render_pages",
-          "{app_name}.api.print_shop.brandbook": "{app_name}.studio.tenant.api.print_shop.brandbook"
+          "{app_name}.api.print_shop.brandbook": "{app_name}.studio.tenant.api.print_shop.brandbook",
+          "{app_name}.api.print_shop.list_print_jobs": "{app_name}.studio.tenant.api.print_shop.list_print_jobs",
+          "{app_name}.api.print_shop.get_print_job": "{app_name}.studio.tenant.api.print_shop.get_print_job",
+          "{app_name}.api.print_shop.update_print_job": "{app_name}.studio.tenant.api.print_shop.update_print_job",
+          "{app_name}.api.print_shop.save_hot_folder_settings": "{app_name}.studio.tenant.api.print_shop.save_hot_folder_settings"
         },
         "fixtures": [
           {

@@ -1,4 +1,9 @@
-# studio — Frappe app fragment
+# studio — Frappe app fragment + Next.js half
+
+`studio/nextjs/` is the SDK's Next.js half (`studio_sdk`): pages and server
+actions installed into a Next.js shell by the protocol's Next.js composer.
+It only sends gateway cmds that `frappe/manifest.json` whitelists
+(`studio/tests/test_nextjs_half.py` enforces it).
 
 The operations layer for one company where **two personas work
 together**, each on its own engine:

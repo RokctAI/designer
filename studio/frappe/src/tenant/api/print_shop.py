@@ -94,15 +94,44 @@ def get_construction(candidate):
 
 # -- client PDF preflight and imposition -------------------------------
 
+MAX_CLIENT_PDF_BYTES = 100 * 1024 * 1024
+
+
+def _client_pdf(file_url=None, file_data=None, filename=None) -> tuple[str, str]:
+    """(disk path, file_url) for a client PDF given either an existing
+    File url or base64 ``file_data`` uploaded straight from Next.js."""
+    if file_url:
+        return file_disk_path(file_url), file_url
+    if not file_data:
+        frappe.throw("Give file_url or file_data")
+    import base64
+
+    if "," in file_data[:100]:
+        file_data = file_data.split(",", 1)[1]  # data: URI prefix
+    raw = base64.b64decode(file_data)
+    if len(raw) > MAX_CLIENT_PDF_BYTES:
+        frappe.throw("PDF is larger than 100MB")
+    if not raw.startswith(b"%PDF"):
+        frappe.throw("That file is not a PDF")
+    f = frappe.get_doc({"doctype": "File", "file_name": filename or "client.pdf",
+                        "is_private": 1, "content": raw})
+    f.save()
+    return f.get_full_path(), f.file_url
+
 
 @frappe.whitelist()
-def preflight_upload(file_url, min_ppi=300, max_ink=300, bleed_mm=3):
-    """Preflight a client PDF the user uploaded. Returns the report
-    (``blocked`` means it must not go to plate as-is)."""
-    require("File", "read")
-    return _engine_call(engine_bridge.preflight_pdf, file_disk_path(file_url),
-                        min_ppi=float(min_ppi), max_ink=float(max_ink),
-                        min_bleed_mm=float(bleed_mm))
+def preflight_upload(file_url=None, min_ppi=300, max_ink=300, bleed_mm=3,
+                     file_data=None, filename=None):
+    """Preflight a client PDF (an existing File url, or base64
+    ``file_data`` + ``filename``). Returns the report plus the stored
+    ``file_url`` (``blocked`` means it must not go to plate as-is)."""
+    require("File", "create" if file_data else "read")
+    path, url = _client_pdf(file_url, file_data, filename)
+    report = _engine_call(engine_bridge.preflight_pdf, path,
+                          min_ppi=float(min_ppi), max_ink=float(max_ink),
+                          min_bleed_mm=float(bleed_mm))
+    report["file_url"] = url
+    return report
 
 
 @frappe.whitelist()
@@ -120,13 +149,15 @@ def _sheet_arg(sheet):
 
 
 @frappe.whitelist()
-def impose_upload(file_url, sheet="SRA3", quantity=None, gap_mm=None, margin_mm=10):
+def impose_upload(file_url=None, sheet="SRA3", quantity=None, gap_mm=None, margin_mm=10,
+                  file_data=None, filename=None):
     """N-up a one-page client PDF onto a press sheet. Returns
     {pdf_url, layout}."""
-    require("File", "read")
+    require("File", "create" if file_data else "read")
+    path, file_url = _client_pdf(file_url, file_data, filename)
     out = _tmp(".pdf")
     layout = _engine_call(
-        engine_bridge.impose, file_disk_path(file_url), out, sheet=_sheet_arg(sheet),
+        engine_bridge.impose, path, out, sheet=_sheet_arg(sheet),
         quantity=int(quantity) if quantity else None,
         gap_mm=float(gap_mm) if gap_mm not in (None, "") else None,
         margin_mm=float(margin_mm))
@@ -152,6 +183,48 @@ def _job_dict(job_doc, extra=None) -> dict:
     }
     data.update(extra or {})
     return data
+
+
+PRINT_JOB_FIELDS = ["name", "candidate", "request", "customer", "vendor_name", "final_size",
+                    "sides", "material_finish", "status", "quantity", "stock", "due_date",
+                    "sheet", "press_pdf", "imposed_pdf", "ticket_pdf", "layout_json",
+                    "sales_order", "sales_invoice", "modified"]
+
+
+@frappe.whitelist()
+def list_print_jobs(status=None, limit=50):
+    """Print jobs for the board, newest first."""
+    require("Design Print Job", "read")
+    filters = {"status": status} if status else {}
+    return frappe.get_all("Design Print Job", filters=filters, fields=PRINT_JOB_FIELDS,
+                          order_by="modified desc", limit_page_length=int(limit))
+
+
+@frappe.whitelist()
+def get_print_job(print_job):
+    """One print job with its files and imposition layout."""
+    job = frappe.get_doc("Design Print Job", print_job)
+    require("Design Print Job", "read", doc=job)
+    data = {f: job.get(f) for f in PRINT_JOB_FIELDS}
+    data["layout"] = json.loads(job.layout_json) if job.get("layout_json") else None
+    return data
+
+
+@frappe.whitelist()
+def update_print_job(print_job, values):
+    """Set the production fields the board edits (quantity, stock, due
+    date, sheet, size, sides, finish, vendor, status)."""
+    job = frappe.get_doc("Design Print Job", print_job)
+    require("Design Print Job", "write", doc=job)
+    if isinstance(values, str):
+        values = json.loads(values)
+    editable = {"quantity", "stock", "due_date", "sheet", "final_size", "sides",
+                "material_finish", "vendor_name", "status"}
+    for key, value in (values or {}).items():
+        if key in editable:
+            job.set(key, value)
+    job.save()
+    return get_print_job(job.name)
 
 
 @frappe.whitelist()
@@ -300,6 +373,23 @@ def run_hot_folder_pass(force=False):
                                    json.dumps(results)[:100000])
         frappe.db.commit()
     return results
+
+
+@frappe.whitelist()
+def save_hot_folder_settings(values):
+    """Update the hot-folder settings from the Next.js settings page."""
+    require("Design Studio Settings", "write")
+    if isinstance(values, str):
+        values = json.loads(values)
+    doc = frappe.get_single("Design Studio Settings")
+    mapping = {"enabled": "hot_folder_enabled", "inbox": "hot_folder_inbox",
+               "outbox": "hot_folder_outbox", "sheet": "hot_folder_sheet",
+               "format": "hot_folder_format", "design_system": "hot_folder_design_system"}
+    for key, field in mapping.items():
+        if key in (values or {}):
+            doc.set(field, values[key])
+    doc.save()
+    return get_hot_folder_status()
 
 
 @frappe.whitelist()
