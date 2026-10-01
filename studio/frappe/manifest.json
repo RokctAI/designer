@@ -35,7 +35,19 @@
           "{app_name}.api.document_request.queue_document_request": "{app_name}.studio.tenant.api.document_request.queue_document_request",
           "{app_name}.api.document_request.get_document_status": "{app_name}.studio.tenant.api.document_request.get_document_status",
           "{app_name}.api.document_request.list_document_requests": "{app_name}.studio.tenant.api.document_request.list_document_requests",
-          "{app_name}.api.document_request.get_artifact_gaps": "{app_name}.studio.tenant.api.document_request.get_artifact_gaps"
+          "{app_name}.api.document_request.get_artifact_gaps": "{app_name}.studio.tenant.api.document_request.get_artifact_gaps",
+          "{app_name}.api.print_shop.get_construction": "{app_name}.studio.tenant.api.print_shop.get_construction",
+          "{app_name}.api.print_shop.preflight_upload": "{app_name}.studio.tenant.api.print_shop.preflight_upload",
+          "{app_name}.api.print_shop.list_sheets": "{app_name}.studio.tenant.api.print_shop.list_sheets",
+          "{app_name}.api.print_shop.impose_upload": "{app_name}.studio.tenant.api.print_shop.impose_upload",
+          "{app_name}.api.print_shop.prepare_print_job": "{app_name}.studio.tenant.api.print_shop.prepare_print_job",
+          "{app_name}.api.print_shop.create_proof": "{app_name}.studio.tenant.api.print_shop.create_proof",
+          "{app_name}.api.print_shop.send_proof": "{app_name}.studio.tenant.api.print_shop.send_proof",
+          "{app_name}.api.print_shop.run_hot_folder": "{app_name}.studio.tenant.api.print_shop.run_hot_folder",
+          "{app_name}.api.print_shop.get_hot_folder_status": "{app_name}.studio.tenant.api.print_shop.get_hot_folder_status",
+          "{app_name}.api.print_shop.render_preview": "{app_name}.studio.tenant.api.print_shop.render_preview",
+          "{app_name}.api.print_shop.render_pages": "{app_name}.studio.tenant.api.print_shop.render_pages",
+          "{app_name}.api.print_shop.brandbook": "{app_name}.studio.tenant.api.print_shop.brandbook"
         },
         "fixtures": [
           {
@@ -71,6 +83,9 @@
           ],
           "hourly": [
             "{app_name}.studio.tenant.tasks.sweep_queue"
+          ],
+          "all": [
+            "{app_name}.studio.tenant.tasks.process_hot_folder"
           ]
         }
       }

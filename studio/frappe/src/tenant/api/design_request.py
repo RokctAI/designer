@@ -291,11 +291,13 @@ def save_candidate_edit(candidate, svg):
 
 
 @frappe.whitelist()
-def render_deliverable(candidate, format=None, cmyk=1, marks=1):
-    """Press-ready vector PDF of a candidate via the engine
-    (render_pdf, CMYK). ``marks`` is recorded but printer's marks are
-    not drawn yet (engine limitation — see README). Returns
-    {"pdf_url"}."""
+def render_deliverable(candidate, format=None, cmyk=1, marks=1, overprint_black=1,
+                       construction=0):
+    """Press-ready vector PDF of a candidate via the engine (CMYK).
+    Print formats get bleed and, with ``marks``, crop/registration
+    marks, colour strip and job slug; 100% K overprints unless
+    ``overprint_black`` is 0. ``construction`` draws the construction
+    guides on top (for review, never for press). Returns {"pdf_url"}."""
     cand = frappe.get_doc("Design Candidate", candidate)
     req = frappe.get_doc("Design Request", cand.request)
     require("Design Request", "read", doc=req)
@@ -315,7 +317,9 @@ def render_deliverable(candidate, format=None, cmyk=1, marks=1):
         engine_bridge.render_candidate_pdf(
             svg_text, out.name, cmyk=bool(int(cmyk)),
             format=format or None,
-            system_dict=system_dict_for(req.design_system) if format else None)
+            system_dict=system_dict_for(req.design_system) if format else None,
+            marks=bool(int(marks)), overprint_black=bool(int(overprint_black)),
+            construction=bool(int(construction)))
         with open(out.name, "rb") as fh:
             pdf_bytes = fh.read()
     finally:

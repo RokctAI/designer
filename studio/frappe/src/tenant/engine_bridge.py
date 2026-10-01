@@ -142,7 +142,8 @@ def comply_svg_text(svg_text: str, system_dict: dict,
         os.unlink(tmp.name)
 
 
-def render_candidate_png(svg_text: str, out_path: str, width: int = 1024) -> str:
+def render_candidate_png(svg_text: str, out_path: str, width: int = 1024,
+                         construction: bool = False, background: str = "#ffffff") -> str:
     designer, parse_svg, serialize, VectorizeOptions, _ = _engine_modules()
     tmp = tempfile.NamedTemporaryFile(
         "w", suffix=".svg", delete=False, encoding="utf-8")
@@ -150,7 +151,8 @@ def render_candidate_png(svg_text: str, out_path: str, width: int = 1024) -> str
         tmp.write(svg_text)
         tmp.close()
         doc = parse_svg(tmp.name)
-        designer.render_png(doc, out_path, width=int(width))
+        designer.render_png(doc, out_path, width=int(width), background=background,
+                            construction=bool(construction))
     except Exception as exc:
         raise EngineError(f"PNG render failed: {exc}") from exc
     finally:
@@ -160,15 +162,15 @@ def render_candidate_png(svg_text: str, out_path: str, width: int = 1024) -> str
 
 def render_candidate_pdf(svg_text: str, out_path: str, dpi: float = 300.0,
                          cmyk: bool = True, format: str | None = None,
-                         system_dict: dict | None = None) -> str:
+                         system_dict: dict | None = None, marks: bool = True,
+                         overprint_black: bool = True,
+                         construction: bool = False) -> str:
     """Press-ready vector PDF. When ``format`` (and system) are given the
     SVG is first re-complied onto that format's canvas so print rules
     (bleed, min stroke, ink coverage) run before the render.
 
-    Note: printer's marks (crop/registration) are not drawn yet — the
-    engine's render_pdf has no marks support; bleed comes from the
-    design system's print config. Callers pass ``marks`` today only as a
-    recorded preference.
+    Print formats get bleed from the format/system and, with ``marks``,
+    crop/registration marks, the colour control strip and job slug.
     """
     designer, parse_svg, serialize, VectorizeOptions, _ = _engine_modules()
     if format and system_dict:
@@ -179,7 +181,22 @@ def render_candidate_pdf(svg_text: str, out_path: str, dpi: float = 300.0,
         tmp.write(svg_text)
         tmp.close()
         doc = parse_svg(tmp.name)
-        designer.render_pdf(doc, out_path, dpi=float(dpi), cmyk=bool(cmyk))
+        spec, bleed, icc = None, 0.0, None
+        if format:
+            from designer.tokens import system_from_dict
+
+            spec = _engine_modules()[4].get_format(format)
+            system = system_from_dict(system_dict) if system_dict else None
+            if spec.category == "print":
+                bleed = spec.bleed if spec.bleed is not None else (
+                    system.bleed if system else 0.0)
+                icc = system.icc_profile if system else None
+        is_print = spec is not None and spec.category == "print"
+        designer.render_pdf(doc, out_path, dpi=float(dpi), cmyk=bool(cmyk),
+                            format=spec, bleed=bleed,
+                            marks=bool(marks) and is_print, icc_profile=icc,
+                            overprint_black=bool(overprint_black),
+                            construction=bool(construction))
     except EngineError:
         raise
     except Exception as exc:
@@ -207,3 +224,169 @@ def extract_palette(file_path: str, n: int = 6) -> list[dict]:
 def build_feedback(report_json: str, system_dict: dict) -> str:
     """Prompt guidance for regeneration; pure logic lives in lib."""
     return _feedback.build_feedback(report_json, system_dict)
+
+
+# -- construction guides, prepress and print-shop paperwork ---------------
+
+
+def _doc_from_svg(svg_text: str):
+    _, parse_svg, _, _, _ = _engine_modules()
+    tmp = tempfile.NamedTemporaryFile(
+        "w", suffix=".svg", delete=False, encoding="utf-8")
+    try:
+        tmp.write(svg_text)
+        tmp.close()
+        return parse_svg(tmp.name)
+    finally:
+        os.unlink(tmp.name)
+
+
+def construction(svg_text: str) -> dict:
+    """Construction guides for a design: plain-language notes, the ⚠
+    warnings among them, the raw geometry and an overlay SVG. Never
+    scores or fails a design."""
+    from designer.construct import construct, overlay
+    from designer.svg import serialize
+
+    doc = _doc_from_svg(svg_text)
+    con = construct(doc)
+    return {
+        "notes": con.notes(),
+        "warnings": con.warnings(),
+        "circles": [{"cx": c.cx, "cy": c.cy, "r": c.r} for c in con.circles],
+        "horizontals": [{"y": y, "edges": n} for y, n in con.horizontals],
+        "verticals": [{"x": x, "edges": n} for x, n in con.verticals],
+        "ratios": [{"a": i + 1, "b": j + 1, "ratio": r} for i, j, r in con.ratios],
+        "overlay_svg": serialize(overlay(doc, con)),
+    }
+
+
+def preflight_pdf(pdf_path: str, min_ppi: float = 300.0, max_ink: float = 300.0,
+                  min_bleed_mm: float = 3.0) -> dict:
+    """Preflight a client PDF. Returns the report as a dict
+    (``blocked``, ``score``, ``findings``)."""
+    import json
+
+    from designer.preflight import preflight_pdf as _preflight
+
+    try:
+        report = _preflight(pdf_path, min_ppi=min_ppi, max_ink=max_ink,
+                            min_bleed_mm=min_bleed_mm)
+    except Exception as exc:
+        raise EngineError(f"Preflight failed: {exc}") from exc
+    return json.loads(report.to_json())
+
+
+def list_sheets() -> dict:
+    from designer.impose import SHEETS_MM
+
+    return {name: list(mm) for name, mm in SHEETS_MM.items()}
+
+
+def impose(pdf_path: str, out_path: str, sheet="SRA3", quantity: int | None = None,
+           gap_mm: float | None = None, margin_mm: float = 10.0) -> dict:
+    """N-up a one-page print PDF onto a press sheet. Returns the layout."""
+    from designer.impose import impose_pdf
+
+    try:
+        layout = impose_pdf(pdf_path, out_path, sheet=sheet, quantity=quantity,
+                            gap_mm=gap_mm, margin_mm=margin_mm)
+    except ValueError as exc:
+        raise EngineError(str(exc)) from exc
+    data = layout.to_dict()
+    if quantity:
+        data["sheets"] = layout.sheets_for(quantity)
+    return data
+
+
+def _job(job: dict | None):
+    from designer.production import Job
+
+    job = dict(job or {})
+    known = {k: job.pop(k) for k in list(job) if k in Job.__dataclass_fields__}
+    if known.get("quantity") is not None:
+        known["quantity"] = int(known["quantity"])
+    return Job(**known, extra={k: str(v) for k, v in job.items() if v})
+
+
+def job_ticket(svg_text: str, out_path: str, job: dict | None = None,
+               system_dict: dict | None = None, format: str | None = None,
+               layout: dict | None = None) -> str:
+    """One-page A4 job ticket PDF for the press operator."""
+    from designer.impose import Layout
+    from designer.production import job_ticket as _ticket
+
+    doc = _doc_from_svg(svg_text)
+    report = None
+    if system_dict:
+        from designer.engine import ComplianceEngine
+        from designer.tokens import system_from_dict
+
+        report = ComplianceEngine(system_from_dict(system_dict), format=format).audit(doc)
+    lay = None
+    if layout:
+        lay = Layout(layout["sheet"], tuple(layout["sheet_mm"]), tuple(layout["item_mm"]),
+                     layout["cols"], layout["rows"], layout["rotated"],
+                     layout["bleed_mm"], layout["gap_mm"])
+    _ticket(doc, out_path, _job(job), report=report, layout=lay)
+    return out_path
+
+
+def proof(svg_texts: list[str], out_path: str, job: dict | None = None,
+          approve_url: str = "") -> str:
+    """Watermarked low-res client proof PDF with a sign-off block."""
+    from designer.production import proof as _proof
+
+    _proof([_doc_from_svg(t) for t in svg_texts], out_path, _job(job),
+           approve_url=approve_url)
+    return out_path
+
+
+def process_hot_folder(inbox: str, outbox: str, system_dict: dict | None = None,
+                       format: str | None = None, sheet: str | None = None) -> list[dict]:
+    """One hot-folder pass (see designer.hotfolder)."""
+    from designer.hotfolder import process_folder
+    from designer.tokens import system_from_dict
+
+    system = system_from_dict(system_dict) if system_dict else None
+    return [r.to_dict() for r in process_folder(
+        inbox, outbox, system=system, format=format or None, sheet=sheet or None)]
+
+
+def render_pages_pdf(svg_texts: list[str], out_path: str, cmyk: bool = True,
+                     format: str | None = None, system_dict: dict | None = None,
+                     marks: bool = True) -> str:
+    """One multi-page PDF from several designs (front/back, folded
+    panels), sharing format, bleed and marks."""
+    designer = _engine_modules()[0]
+    docs = [_doc_from_svg(t) for t in svg_texts]
+    spec, bleed, icc = None, 0.0, None
+    if format:
+        from designer.tokens import system_from_dict
+
+        spec = _engine_modules()[4].get_format(format)
+        system = system_from_dict(system_dict) if system_dict else None
+        if spec.category == "print":
+            bleed = spec.bleed if spec.bleed is not None else (system.bleed if system else 0.0)
+            icc = system.icc_profile if system else None
+    is_print = spec is not None and spec.category == "print"
+    try:
+        designer.render_pdf(docs, out_path, cmyk=bool(cmyk), format=spec, bleed=bleed,
+                            marks=bool(marks) and is_print, icc_profile=icc)
+    except Exception as exc:
+        raise EngineError(f"PDF render failed: {exc}") from exc
+    return out_path
+
+
+def brandbook_pdf(system_dict: dict, out_path: str, logo_path: str | None = None) -> str:
+    """The design system as an A4 brand manual PDF."""
+    from designer.brandbook import BrandbookError, build_brandbook
+    from designer.render import render_pdf
+    from designer.tokens import system_from_dict
+
+    try:
+        pages = build_brandbook(system_from_dict(system_dict), logo=logo_path)
+    except BrandbookError as exc:
+        raise EngineError(str(exc)) from exc
+    render_pdf(pages, out_path)
+    return out_path

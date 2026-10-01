@@ -245,6 +245,22 @@ accessibility:
 All color math runs in **OKLab**, so "nearest color" matches human
 perception, and contrast checks implement **WCAG 2.x** exactly.
 
+## Print shop
+
+```bash
+designer preflight client.pdf                    # fonts, bleed, image ppi, RGB, ink; exit 1 on blockers
+designer impose card.pdf -o sheet.pdf --sheet SRA3 --quantity 500
+designer ticket logo.svg -o ticket.pdf --client Acme --quantity 500 --stock "350gsm matt"
+designer proof logo.svg -o proof.pdf --client Acme --approve-url https://.../review/TOKEN
+designer hotfolder inbox/ outbox/ --format business-card --sheet SRA3 --watch
+```
+
+Python: `designer.preflight.preflight_pdf`, `designer.impose.impose_pdf` /
+`plan`, `designer.production.job_ticket` / `proof`,
+`designer.hotfolder.process_folder`. The studio Frappe fragment exposes
+all of them to the Next.js frontend (`api.print_shop.*`, see
+docs/FRONTEND_SPEC.md §2.4), including emailing proofs for client sign-off.
+
 ## Black overprint
 
 CMYK PDFs overprint 100% K fills and strokes by default, so a slightly

@@ -99,3 +99,11 @@ def sweep_queue():
         for name in queued:
             frappe.enqueue(fn, queue="long",
                            name=name, job_name=f"{prefix}:{name}")
+
+
+def process_hot_folder():
+    """Every scheduler tick: one hot-folder pass when enabled in
+    Design Studio Settings."""
+    from .api.print_shop import run_hot_folder_pass
+
+    run_hot_folder_pass()
