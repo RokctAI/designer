@@ -335,3 +335,45 @@ def render_deliverable(candidate, format=None, cmyk=1, marks=1, overprint_black=
     })
     pdf_file.save(ignore_permissions=True)
     return {"pdf_url": pdf_file.file_url}
+
+
+UPLOAD_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp", ".svg", ".md")
+
+
+@frappe.whitelist()
+def upload_file(file_data, filename):
+    """Store a base64 file (artwork, or a questions.md) sent straight from Next.js as a private
+    File. Returns {"file_url"} for create_design_request's
+    ``file_urls``, comply_upload, audit_upload, extract_palette or
+    create_document_request's ``questions_file``."""
+    require("File", "create")
+    import base64
+    import os
+
+    if not (filename or "").lower().endswith(UPLOAD_EXTENSIONS):
+        frappe.throw("Upload a PNG, JPEG, WebP, SVG or .md file")
+    if "," in file_data[:100]:
+        file_data = file_data.split(",", 1)[1]  # data: URI prefix
+    raw = base64.b64decode(file_data)
+    if len(raw) > MAX_UPLOAD_BYTES:
+        frappe.throw(f"File is too large; the limit is "
+                     f"{MAX_UPLOAD_BYTES // (1024 * 1024)}MB per file")
+    f = frappe.get_doc({"doctype": "File",
+                        "file_name": os.path.basename(filename),
+                        "is_private": 1, "content": raw})
+    f.save()
+    return {"file_url": f.file_url}
+
+
+@frappe.whitelist()
+def get_candidate_svg(candidate):
+    """A candidate's compliant SVG text, so Next.js can preview and edit
+    it without reading a private file URL."""
+    cand = frappe.get_doc("Design Candidate", candidate)
+    req = frappe.get_doc("Design Request", cand.request)
+    require("Design Request", "read", doc=req)
+    if not cand.compliant_svg:
+        frappe.throw(f"Candidate {cand.name} has no compliant SVG yet")
+    with open(file_disk_path(cand.compliant_svg), encoding="utf-8") as fh:
+        return {"svg": fh.read(), "score": cand.score_after,
+                "report_json": cand.report_json}

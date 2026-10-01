@@ -18,7 +18,7 @@
 
 import { use, useEffect, useState } from "react";
 
-import { getReview, submitReview } from "@/app/actions/studio/print-shop";
+import { getReview, submitReview } from "@/app/actions/studio/proofs/actions";
 import { Button } from "@/components/ui/button";
 
 // Public page: the link in proof emails. No login; the token is the key.

@@ -20,13 +20,9 @@ import { Loader2 } from "lucide-react";
 import { use, useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import {
-  getPrintJob,
-  listSheets,
-  preparePrintJob,
-  updatePrintJob,
-  type Layout,
-} from "@/app/actions/studio/print-shop";
+import { listSheets } from "@/app/actions/studio/prepress/actions";
+import type { Layout } from "@/app/actions/studio/prepress/types";
+import { getPrintJob, preparePrintJob, updatePrintJob } from "@/app/actions/studio/print-jobs/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 

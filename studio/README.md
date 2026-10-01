@@ -3,7 +3,10 @@
 `studio/nextjs/` is the SDK's Next.js half (`studio_sdk`): pages and server
 actions installed into a Next.js shell by the protocol's Next.js composer.
 It only sends gateway cmds that `frappe/manifest.json` whitelists
-(`studio/tests/test_nextjs_half.py` enforces it).
+(`studio/tests/test_nextjs_half.py` enforces it). Sliced like the other
+SDKs: gateway calls in `app/services/all/studio/<resource>.ts`, server
+actions and types in `app/actions/studio/<resource>/{actions,types}.ts`,
+pages under `app/studio/`.
 
 The operations layer for one company where **two personas work
 together**, each on its own engine:
