@@ -14,44 +14,36 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+
 import Link from "next/link";
 
-import { listPrintJobs } from "@/app/actions/studio/print-jobs/actions";
+import { listDesignSystems } from "@/app/actions/studio/systems/actions";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const dynamic = "force-dynamic";
 
-export default async function PrintJobsPage() {
-  const jobs = await listPrintJobs();
+export default async function DesignSystemsPage() {
+  const systems = await listDesignSystems();
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Print jobs</h1>
-        <Link href="/studio/preflight" className="text-sm underline">
-          Check a client PDF
+        <h1 className="text-2xl font-semibold">Design systems</h1>
+        <Link href="/studio/systems/new" className="text-sm underline">
+          New design system
         </Link>
       </div>
-      {jobs.length === 0 ? (
-        <p className="text-muted-foreground">No print jobs yet.</p>
+      {systems.length === 0 ? (
+        <p className="text-muted-foreground">No design systems yet.</p>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {jobs.map((job) => (
-            <Link key={job.name} href={`/studio/print/${encodeURIComponent(job.name)}`}>
+          {systems.map((s) => (
+            <Link key={s.name} href={`/studio/systems/${encodeURIComponent(s.name)}`}>
               <Card className="hover:border-primary">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0">
-                  <CardTitle className="text-base">{job.name}</CardTitle>
-                  <Badge variant="outline">{job.status}</Badge>
+                  <CardTitle className="text-base">{s.system_name || s.name}</CardTitle>
+                  {s.is_default ? <Badge>Default</Badge> : null}
                 </CardHeader>
-                <CardContent className="space-y-1 text-sm text-muted-foreground">
-                  <div>{job.customer || "No client"}</div>
-                  <div>
-                    {[job.final_size, job.quantity && `${job.quantity} copies`, job.stock]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </div>
-                  {job.due_date && <div>Due {job.due_date}</div>}
-                </CardContent>
               </Card>
             </Link>
           ))}

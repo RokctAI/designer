@@ -20,12 +20,8 @@ import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import {
-  imposeClientPdf,
-  listSheets,
-  preflightPdf,
-  type PreflightReport,
-} from "@/app/actions/studio/print-shop";
+import { imposeClientPdf, listSheets, preflightPdf } from "@/app/actions/studio/prepress/actions";
+import type { PreflightReport } from "@/app/actions/studio/prepress/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

@@ -14,43 +14,38 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+
 import Link from "next/link";
 
-import { listPrintJobs } from "@/app/actions/studio/print-jobs/actions";
+import { listCampaigns } from "@/app/actions/studio/campaigns/actions";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const dynamic = "force-dynamic";
 
-export default async function PrintJobsPage() {
-  const jobs = await listPrintJobs();
+export default async function CampaignsPage() {
+  const campaigns = await listCampaigns();
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Print jobs</h1>
-        <Link href="/studio/preflight" className="text-sm underline">
-          Check a client PDF
+        <h1 className="text-2xl font-semibold">Campaigns</h1>
+        <Link href="/studio/campaigns/new" className="text-sm underline">
+          New campaign
         </Link>
       </div>
-      {jobs.length === 0 ? (
-        <p className="text-muted-foreground">No print jobs yet.</p>
+      {campaigns.length === 0 ? (
+        <p className="text-muted-foreground">No campaigns yet.</p>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {jobs.map((job) => (
-            <Link key={job.name} href={`/studio/print/${encodeURIComponent(job.name)}`}>
+          {campaigns.map((c) => (
+            <Link key={c.name} href={`/studio/campaigns/${encodeURIComponent(c.name)}`}>
               <Card className="hover:border-primary">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0">
-                  <CardTitle className="text-base">{job.name}</CardTitle>
-                  <Badge variant="outline">{job.status}</Badge>
+                  <CardTitle className="text-base">{c.title || c.name}</CardTitle>
+                  <Badge variant="outline">{c.status}</Badge>
                 </CardHeader>
-                <CardContent className="space-y-1 text-sm text-muted-foreground">
-                  <div>{job.customer || "No client"}</div>
-                  <div>
-                    {[job.final_size, job.quantity && `${job.quantity} copies`, job.stock]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </div>
-                  {job.due_date && <div>Due {job.due_date}</div>}
+                <CardContent className="text-sm text-muted-foreground">
+                  {[c.customer, c.design_system].filter(Boolean).join(" · ")}
                 </CardContent>
               </Card>
             </Link>

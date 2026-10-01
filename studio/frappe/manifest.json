@@ -17,6 +17,8 @@
           "{app_name}.api.design_request.comply_upload": "{app_name}.studio.tenant.api.design_request.comply_upload",
           "{app_name}.api.design_request.audit_upload": "{app_name}.studio.tenant.api.design_request.audit_upload",
           "{app_name}.api.design_request.save_candidate_edit": "{app_name}.studio.tenant.api.design_request.save_candidate_edit",
+          "{app_name}.api.design_request.upload_file": "{app_name}.studio.tenant.api.design_request.upload_file",
+          "{app_name}.api.design_request.get_candidate_svg": "{app_name}.studio.tenant.api.design_request.get_candidate_svg",
           "{app_name}.api.design_request.render_deliverable": "{app_name}.studio.tenant.api.design_request.render_deliverable",
           "{app_name}.api.design_system.derive_design_system": "{app_name}.studio.tenant.api.design_system.derive_design_system",
           "{app_name}.api.design_system.list_design_systems": "{app_name}.studio.tenant.api.design_system.list_design_systems",

@@ -18,7 +18,8 @@
 
 import { useState } from "react";
 
-import { getConstruction, type Construction } from "@/app/actions/studio/print-shop";
+import { getConstruction } from "@/app/actions/studio/prepress/actions";
+import type { Construction } from "@/app/actions/studio/prepress/types";
 import { Button } from "@/components/ui/button";
 
 /**

@@ -20,12 +20,8 @@ import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import {
-  getHotFolderStatus,
-  listSheets,
-  runHotFolder,
-  saveHotFolderSettings,
-} from "@/app/actions/studio/print-shop";
+import { getHotFolderStatus, runHotFolder, saveHotFolderSettings } from "@/app/actions/studio/hot-folder/actions";
+import { listSheets } from "@/app/actions/studio/prepress/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

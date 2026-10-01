@@ -19,7 +19,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { createApprovalLink, createProof, sendProof } from "@/app/actions/studio/print-shop";
+import { createApprovalLink, createProof, sendProof } from "@/app/actions/studio/proofs/actions";
 import { Button } from "@/components/ui/button";
 
 /** Proof + client sign-off for one candidate: download or email the proof. */
