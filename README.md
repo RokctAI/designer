@@ -243,6 +243,24 @@ accessibility:
 All color math runs in **OKLab**, so "nearest color" matches human
 perception, and contrast checks implement **WCAG 2.x** exactly.
 
+## Construction guides
+
+Draws the bounding box, shared alignment lines, best-fit circles and named
+size ratios over a logo, to check it against construction rules. It is
+informational only and never changes a score. Off by default; turn it on per call:
+
+```bash
+designer construct logo.svg -o guides.svg          # guides + text summary
+designer render logo.svg -o logo.png --construction
+designer comply logo.svg --construction            # also writes *.construction.svg
+```
+
+```python
+from designer.construct import construct, with_construction
+render_png(doc, "logo.png", construction=True)    # render_pdf takes it too
+guided = with_construction(doc, on=True)
+```
+
 ## Python API
 
 ```python

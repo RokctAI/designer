@@ -190,11 +190,15 @@ def render_png(
     dpi: float | None = None,
     supersample: int = 2,
     background: str = "#ffffff",
+    construction: bool = False,
 ) -> Image.Image:
     """Rasterize a Document. ``width`` (px) or ``dpi`` set the output
     size; the default is the document's own pixel size."""
     if width and dpi:
         raise RenderError("give width or dpi, not both")
+    if construction:
+        from designer.construct import with_construction
+        doc = with_construction(doc)
     if width:
         scale = width / doc.width
     elif dpi:
@@ -350,6 +354,7 @@ def render_pdf(
     bleed: float = 0.0,
     marks: bool = False,
     icc_profile: str | Path | None = None,
+    construction: bool = False,
 ) -> Path:
     """Write a vector PDF.
 
@@ -372,6 +377,10 @@ def render_pdf(
     draws crop marks, registration marks and a job slug line outside
     the bleed — in registration color (all separations) when ``cmyk``.
     """
+    if construction:
+        from designer.construct import with_construction
+        doc = [with_construction(d) for d in doc] if isinstance(doc, (list, tuple)) \
+            else with_construction(doc)
     writer = _PdfWriter(
         doc, cmyk=cmyk, embed_fonts=embed_fonts,
         format=format, bleed=bleed, marks=marks, icc_profile=icc_profile,

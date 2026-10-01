@@ -143,6 +143,23 @@ def cmd_audit(args: argparse.Namespace) -> int:
     return 0 if report.score >= args.min_score and not report.blocked else 1
 
 
+def cmd_construct(args: argparse.Namespace) -> int:
+    from designer.construct import construct, overlay
+
+    engine = ComplianceEngine(load_system(args.system))
+    try:
+        doc = engine.load(args.input, _vector_options(args))
+    except (ComplexityError, InvalidImageError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    con = construct(doc)
+    print(con.to_text())
+    if args.output:
+        save(overlay(doc, con), args.output)
+        print(f"Wrote {args.output}")
+    return 0  # informational: never fails a design
+
+
 def cmd_comply(args: argparse.Namespace) -> int:
     engine = ComplianceEngine(load_system(args.system), format=args.format)
     try:
@@ -154,6 +171,11 @@ def cmd_comply(args: argparse.Namespace) -> int:
     report = engine.comply(doc)
     out = Path(args.output) if args.output else _default_output(args.input, ".compliant.svg")
     save(doc, out)
+    if args.construction:
+        from designer.construct import construct, overlay
+        con = construct(doc)
+        guides = out.with_name(out.stem + ".construction.svg")
+        save(overlay(doc, con), guides)
     if args.json:
         print(report.to_json())
     else:
@@ -162,6 +184,10 @@ def cmd_comply(args: argparse.Namespace) -> int:
         print(f"Score before fixes : {before}/100")
         print(f"Score after fixes  : {report.score}/100")
         print(f"Wrote {out}")
+        if args.construction:
+            print()
+            print(con.to_text())
+            print(f"Wrote {guides}")
     return 0 if report.score >= args.min_score and not report.blocked else 1
 
 
@@ -289,6 +315,7 @@ def cmd_render(args: argparse.Namespace) -> int:
         render_pdf(
             docs if len(docs) > 1 else doc, out, dpi=args.dpi, cmyk=args.cmyk,
             format=spec, bleed=bleed, marks=marks, icc_profile=icc,
+            construction=args.construction,
         )
     elif suffix in (".png", ".jpg", ".jpeg"):
         image = render_png(
@@ -297,10 +324,12 @@ def cmd_render(args: argparse.Namespace) -> int:
             width=args.width,
             dpi=args.dpi if not args.width else None,
             background=args.background,
+            construction=args.construction,
         )
         image.save(str(out))
     elif suffix == ".svg":
-        save(doc, out)
+        from designer.construct import with_construction
+        save(with_construction(doc, args.construction), out)
     else:
         print(f"error: unsupported output type {suffix!r}", file=sys.stderr)
         return 2
@@ -336,6 +365,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--version", action="version", version=f"designer {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
+    p = sub.add_parser(
+        "construct",
+        help="draw the construction grid (alignment lines, circles, ratios) over a logo; "
+             "report only, never fails",
+    )
+    p.add_argument("input")
+    p.add_argument("--output", "-o", default=None, help="overlay SVG to write")
+    _add_system_arg(p)
+    _add_vector_args(p)
+    p.set_defaults(func=cmd_construct)
+
     p = sub.add_parser("vectorize", help="convert a raster design to clean SVG")
     p.add_argument("input")
     p.add_argument("--output", "-o", default=None)
@@ -364,6 +404,9 @@ def main(argv: list[str] | None = None) -> int:
         "--min-score", type=float, default=0.0, metavar="N",
         help="exit non-zero if the post-fix score is below N",
     )
+    p.add_argument("--construction", action=argparse.BooleanOptionalAction, default=False,
+                   help="draw construction guides (box, alignment lines, circles); "
+                   "informational, never affects the score (default: off)")
     _add_system_arg(p)
     _add_vector_args(p)
     p.set_defaults(func=cmd_comply)
@@ -417,6 +460,9 @@ def main(argv: list[str] | None = None) -> int:
                    help="PNG only: canvas color behind the design")
     p.add_argument("--comply", action="store_true",
                    help="enforce the design system before rendering")
+    p.add_argument("--construction", action=argparse.BooleanOptionalAction, default=False,
+                   help="draw construction guides (box, alignment lines, circles); "
+                   "informational, never affects the score (default: off)")
     _add_format_arg(p)
     _add_system_arg(p)
     _add_vector_args(p)
