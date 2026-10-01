@@ -28,7 +28,7 @@ from designer.rules.layout_rules import (
     RhythmRule,
     WhitespaceRule,
 )
-from designer.rules.print_rules import BleedRule, InkCoverageRule, PrintStrokeRule
+from designer.rules.print_rules import BleedRule, InkCoverageRule, ImageResolutionRule, PrintStrokeRule, RichBlackRule
 from designer.rules.format_rules import (
     CanvasFormatRule,
     MinTextSizeRule,
@@ -82,4 +82,6 @@ __all__ = [
     "PrintStrokeRule",
     "BleedRule",
     "InkCoverageRule",
+    "RichBlackRule",
+    "ImageResolutionRule",
 ]

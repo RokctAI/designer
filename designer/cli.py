@@ -316,6 +316,7 @@ def cmd_render(args: argparse.Namespace) -> int:
             docs if len(docs) > 1 else doc, out, dpi=args.dpi, cmyk=args.cmyk,
             format=spec, bleed=bleed, marks=marks, icc_profile=icc,
             construction=args.construction,
+            overprint_black=args.overprint_black,
         )
     elif suffix in (".png", ".jpg", ".jpeg"):
         image = render_png(
@@ -456,6 +457,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--marks", action=argparse.BooleanOptionalAction, default=None,
                    help="PDF only: draw crop/registration marks and a job slug "
                    "(default: on for print formats with --cmyk or a bleed)")
+    p.add_argument("--overprint-black", action=argparse.BooleanOptionalAction, default=True,
+                   help="PDF --cmyk only: 100%% K fills and strokes overprint, so "
+                   "mis-registration can't halo black (default: on)")
     p.add_argument("--background", default="#ffffff",
                    help="PNG only: canvas color behind the design")
     p.add_argument("--comply", action="store_true",

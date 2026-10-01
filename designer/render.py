@@ -355,6 +355,7 @@ def render_pdf(
     marks: bool = False,
     icc_profile: str | Path | None = None,
     construction: bool = False,
+    overprint_black: bool = True,
 ) -> Path:
     """Write a vector PDF.
 
@@ -384,6 +385,7 @@ def render_pdf(
     writer = _PdfWriter(
         doc, cmyk=cmyk, embed_fonts=embed_fonts,
         format=format, bleed=bleed, marks=marks, icc_profile=icc_profile,
+        overprint_black=overprint_black,
     )
     data = writer.build(dpi)
     out = Path(path)
@@ -401,6 +403,7 @@ class _PdfWriter:
         bleed: float = 0.0,
         marks: bool = False,
         icc_profile: str | Path | None = None,
+        overprint_black: bool = True,
     ):
         self.docs = list(doc) if isinstance(doc, (list, tuple)) else [doc]
         if not self.docs:
@@ -425,6 +428,7 @@ class _PdfWriter:
         self.objects: list[bytes] = []
         self.fonts: dict[str, _PdfFont] = {}
         self.uses_cutcontour = False
+        self.overprint_black = overprint_black
         self.images: list[tuple[str, bytes, int, int, str]] = []
         self.shadings: list[tuple[str, GradientDef]] = []
         self.base_dir = (
@@ -503,13 +507,25 @@ class _PdfWriter:
 
     # -- painting --------------------------------------------------------
 
+    def _is_pure_black(self, rgb: RGB) -> bool:
+        c, m, y, k = self._to_cmyk(rgb)
+        return k > 0.995 and max(c, m, y) < 0.005
+
     def _fill_op(self, rgb: RGB) -> str:
         if self.cmyk:
+            if self.overprint_black:
+                # Industry default: 100% K overprints so a slightly
+                # mis-registered plate can't leave a white halo round black.
+                gs = "/GSop1 gs" if self._is_pure_black(rgb) else "/GSop0 gs"
+                return f"{gs} {self._cmyk_op(rgb)} k"
             return f"{self._cmyk_op(rgb)} k"
         return f"{rgb[0] / 255:.4f} {rgb[1] / 255:.4f} {rgb[2] / 255:.4f} rg"
 
     def _stroke_op(self, rgb: RGB) -> str:
         if self.cmyk:
+            if self.overprint_black:
+                gs = "/GSOP1 gs" if self._is_pure_black(rgb) else "/GSOP0 gs"
+                return f"{gs} {self._cmyk_op(rgb)} K"
             return f"{self._cmyk_op(rgb)} K"
         return f"{rgb[0] / 255:.4f} {rgb[1] / 255:.4f} {rgb[2] / 255:.4f} RG"
 
@@ -985,6 +1001,7 @@ class _PdfWriter:
             shading_refs.append(f"/{name} {obj} 0 R")
 
         resources = "<< "
+        ext_gs: list[str] = []
         if font_refs:
             resources += f"/Font << {' '.join(font_refs)} >> "
         if image_refs:
@@ -1001,7 +1018,14 @@ class _PdfWriter:
             )
             gs = self._add(b"<< /Type /ExtGState /OP true /op true /OPM 1 >>")
             resources += f"/ColorSpace << /CSCut {cs} 0 R >> "
-            resources += f"/ExtGState << /GSov {gs} 0 R >> "
+            ext_gs.append(f"/GSov {gs} 0 R")
+        if self.cmyk and self.overprint_black:
+            for name, body in (("GSop1", b"/op true"), ("GSop0", b"/op false"),
+                               ("GSOP1", b"/OP true"), ("GSOP0", b"/OP false")):
+                ref = self._add(b"<< /Type /ExtGState " + body + b" /OPM 1 >>")
+                ext_gs.append(f"/{name} {ref} 0 R")
+        if ext_gs:
+            resources += f"/ExtGState << {' '.join(ext_gs)} >> "
         resources += ">>"
 
         # Document px -> PDF points (72/inch) at the document's density.

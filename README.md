@@ -237,11 +237,19 @@ accessibility:
 | `print.hairline` | strokes survive the press (print formats) | raise to the press minimum |
 | `print.bleed` | edge artwork extends past trim (print formats) | extend into the bleed |
 | `print.ink` | total ink within the press limit (print formats) | report only |
+| `print.rich_black` | small text / thin lines in black use 100% K, not rich black | sets `#000000` |
+| `print.image_ppi` | placed images reach 300 ppi at print size | report only |
 | `geometry.transform` | flags transforms that couldn't be baked | report only |
 | `engine.capability` | constructs the audit couldn't evaluate are reported | report only |
 
 All color math runs in **OKLab**, so "nearest color" matches human
 perception, and contrast checks implement **WCAG 2.x** exactly.
+
+## Black overprint
+
+CMYK PDFs overprint 100% K fills and strokes by default, so a slightly
+mis-registered plate can't leave a white halo round black type. Turn it off
+with `--no-overprint-black` or `render_pdf(..., overprint_black=False)`.
 
 ## Construction guides
 
