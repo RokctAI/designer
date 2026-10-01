@@ -66,6 +66,41 @@ class Construction:
     circles: list[Circle] = field(default_factory=list)
     ratios: list[tuple[int, int, str]] = field(default_factory=list)  # circle i, j, ratio name
 
+    def notes(self, width: float | None = None, height: float | None = None) -> list[str]:
+        """Plain-language findings, one line each, for the overlay and reports."""
+        x0, y0, x1, y1 = self.box
+        out: list[str] = []
+        if width and height:
+            dx, dy = (x0 + x1) / 2 - width / 2, (y0 + y1) / 2 - height / 2
+            size = max(width, height)
+            if abs(dx) < size * 0.01 and abs(dy) < size * 0.01:
+                out.append("Artwork is centred on the canvas.")
+            else:
+                out.append(f"Artwork sits {abs(dx):.0f}px {'right' if dx > 0 else 'left'}, "
+                           f"{abs(dy):.0f}px {'down' if dy > 0 else 'up'} of canvas centre.")
+        mid_y, mid_x = (y0 + y1) / 2, (x0 + x1) / 2
+        for y, n in self.horizontals:
+            kind = "top line" if y < mid_y else "baseline"
+            out.append(f"{n} shapes share a {kind} at y={y:.0f}: consistent height.")
+        for x, n in self.verticals:
+            kind = "left edge" if x < mid_x else "right edge"
+            out.append(f"{n} shapes share a {kind} at x={x:.0f}.")
+        if not self.horizontals and not self.verticals:
+            out.append("No shared alignment lines: shapes don't share tops, bases or sides.")
+        groups: dict[str, list[str]] = {}
+        for i, j, name in self.ratios:
+            groups.setdefault(name, []).append(f"C{i + 1}/C{j + 1}")
+        for name, pairs in groups.items():
+            what = "Same size" if name == "1:1" else f"Ratio {name}"
+            out.append(f"{what}: {', '.join(pairs)}.")
+        if self.ratios:
+            out.append("Circles on standard ratios suggest the curves were built, not free-drawn.")
+        if self.circles and not self.ratios:
+            out.append("Circles found, but none relate by a standard ratio.")
+        if not self.circles:
+            out.append("No construction circles: the curves are free-drawn.")
+        return out
+
     def to_text(self) -> str:
         x0, y0, x1, y1 = self.box
         lines = [
@@ -80,6 +115,8 @@ class Construction:
             f"  C{i + 1}: centre ({c.cx:.1f}, {c.cy:.1f}) r={c.r:.1f}  follows {math.degrees(c.sweep):.0f}° of edge"
             for i, c in enumerate(self.circles)
         ]
+        lines.append("Notes:")
+        lines += [f"  - {n}" for n in self.notes()]
         if self.ratios:
             lines.append("Circle size ratios:")
             lines += [f"  C{i + 1} : C{j + 1} = {name}" for i, j, name in self.ratios]
@@ -259,16 +296,41 @@ def overlay(doc: Document, con: Construction) -> Document:
                                  "stroke-width": hair}))
     line((x0 + x1) / 2, 0, (x0 + x1) / 2, doc.height, dashed=True)
     line(0, (y0 + y1) / 2, doc.width, (y0 + y1) / 2, dashed=True)
-    for y, _ in con.horizontals:
+    fs = size / 45
+
+    def label(x, y, msg, color=GUIDE, anchor="start", scale=1.0):
+        shapes.append(Shape("text", {"x": f"{x:.2f}", "y": f"{y:.2f}", "fill": color,
+                                     "font-family": "Arial", "font-size": f"{fs * scale:.2f}",
+                                     "text-anchor": anchor}, text=msg))
+
+    for y, n in con.horizontals:
         line(0, y, doc.width, y)
-    for x, _ in con.verticals:
+        label(doc.width - fs * 0.3, y - fs * 0.3, f"y={y:.0f} ({n} edges)", anchor="end")
+    for x, n in con.verticals:
         line(x, 0, x, doc.height)
+        right = x > doc.width * 0.8
+        label(x + (-fs * 0.3 if right else fs * 0.3), y1 - fs * 0.3, f"x={x:.0f}",
+              anchor="end" if right else "start")
     for i, c in enumerate(con.circles):
         shapes.append(Shape("circle", {"cx": f"{c.cx:.2f}", "cy": f"{c.cy:.2f}", "r": f"{c.r:.2f}",
                                        "fill": "none", "stroke": CIRCLE, "stroke-width": hair}))
         shapes.append(Shape("circle", {"cx": f"{c.cx:.2f}", "cy": f"{c.cy:.2f}",
                                        "r": f"{float(hair) * 2:.2f}", "fill": CIRCLE}))
-    return Document(width=doc.width, height=doc.height, shapes=shapes, defs=list(doc.defs),
+        a = math.radians(-90 + 25 * i)  # stagger labels round the rim so they don't stack
+        rr = c.r + fs * 0.7
+        label(c.cx + rr * math.cos(a), c.cy + rr * math.sin(a) + fs * 0.3, f"C{i + 1}",
+              color=CIRCLE, anchor="middle", scale=0.8)
+    notes = con.notes(doc.width, doc.height)
+    line_h = fs * 1.4
+    top = doc.height + line_h
+    shapes.append(Shape("rect", {"x": "0", "y": f"{doc.height:.2f}", "width": f"{doc.width:.2f}",
+                                 "height": f"{line_h * (len(notes) + 1.5):.2f}", "fill": "#ffffff"}))
+    shapes.append(Shape("line", {"x1": "0", "y1": f"{doc.height:.2f}", "x2": f"{doc.width:.2f}",
+                                 "y2": f"{doc.height:.2f}", "stroke": GUIDE, "stroke-width": hair}))
+    label(fs * 0.6, top, "Construction notes (informational, not scored)", scale=1.1)
+    for k, n in enumerate(notes, 1):
+        label(fs * 0.6, top + k * line_h, n, color="#333333")
+    return Document(width=doc.width, height=doc.height + line_h * (len(notes) + 1.5), shapes=shapes, defs=list(doc.defs),
                     raw_defs=list(doc.raw_defs), source=doc.source)
 
 
