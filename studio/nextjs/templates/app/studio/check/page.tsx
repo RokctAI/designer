@@ -17,7 +17,7 @@
 
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { RiLoader4Line } from "@remixicon/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -76,7 +76,7 @@ export default function CheckArtworkPage() {
       <h1 className="text-2xl font-semibold">Check artwork</h1>
       <SystemFormatFields system={system} onSystem={setSystem} format={format} onFormat={setFormat} allowNoFormat />
       <input type="file" accept=".png,.jpg,.jpeg,.webp,.svg" onChange={(e) => onFile(e.target.files?.[0])} />
-      {busy && <Loader2 className="h-5 w-5 animate-spin" />}
+      {busy && <RiLoader4Line className="h-5 w-5 animate-spin" />}
       {score != null && (
         <div className="space-y-3">
           <div className="text-lg font-medium">Score {score.toFixed(1)}/100</div>

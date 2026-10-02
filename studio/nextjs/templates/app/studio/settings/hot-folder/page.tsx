@@ -16,7 +16,7 @@
 
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { RiLoader4Line } from "@remixicon/react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -43,7 +43,7 @@ export default function HotFolderPage() {
     listSheets().then((s) => setSheets(Object.keys(s))).catch(() => setSheets([]));
   }, []);
 
-  if (!cfg) return <Loader2 className="m-6 h-6 w-6 animate-spin" />;
+  if (!cfg) return <RiLoader4Line className="m-6 h-6 w-6 animate-spin" />;
 
   async function save() {
     const { last_run: _ignored, ...values } = cfg;
@@ -105,7 +105,7 @@ export default function HotFolderPage() {
       <div className="flex gap-3">
         <Button variant="outline" onClick={save}>Save</Button>
         <Button onClick={run} disabled={busy}>
-          {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {busy && <RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />}
           Run now
         </Button>
       </div>

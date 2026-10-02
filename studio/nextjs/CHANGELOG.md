@@ -1,3 +1,9 @@
+## 1.1.1
+
+* fix(icons): `lucide-react` icons replaced with `@remixicon/react`, per the
+  one-icon-set standard. Manifest dependency swapped to
+  `@remixicon/react ^4.6.0`.
+
 ## 1.1.0
 
 * Pages for the rest of studio: `/studio` (home and request history),

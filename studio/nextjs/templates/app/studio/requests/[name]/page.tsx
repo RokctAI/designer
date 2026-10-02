@@ -17,7 +17,7 @@
 
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { RiLoader4Line } from "@remixicon/react";
 import { use, useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -53,7 +53,7 @@ export default function RequestPage({ params }: { params: Promise<{ name: string
       <div className="flex items-center gap-3">
         <h1 className="text-2xl font-semibold">{name}</h1>
         <Badge variant="outline">{status.status}</Badge>
-        {WORKING.includes(status.status) && <Loader2 className="h-4 w-4 animate-spin" />}
+        {WORKING.includes(status.status) && <RiLoader4Line className="h-4 w-4 animate-spin" />}
       </div>
       {status.error_message && <p className="text-sm text-destructive">{status.error_message}</p>}
       {status.status === "Draft" && (

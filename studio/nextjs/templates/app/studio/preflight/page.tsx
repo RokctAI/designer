@@ -16,7 +16,7 @@
 
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { RiLoader4Line } from "@remixicon/react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -79,7 +79,7 @@ export default function PreflightPage() {
     <div className="space-y-6 p-6">
       <h1 className="text-2xl font-semibold">Check a client PDF</h1>
       <input type="file" accept="application/pdf" onChange={(e) => onFile(e.target.files?.[0])} />
-      {busy && <Loader2 className="h-5 w-5 animate-spin" />}
+      {busy && <RiLoader4Line className="h-5 w-5 animate-spin" />}
       {report && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
