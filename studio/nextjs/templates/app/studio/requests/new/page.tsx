@@ -17,7 +17,7 @@
 
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { RiLoader4Line } from "@remixicon/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -77,7 +77,7 @@ export default function NewRequestPage() {
       )}
       <SystemFormatFields system={system} onSystem={setSystem} format={format} onFormat={setFormat} />
       <Button disabled={!ready || busy} onClick={submit}>
-        {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        {busy && <RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />}
         Start
       </Button>
     </div>

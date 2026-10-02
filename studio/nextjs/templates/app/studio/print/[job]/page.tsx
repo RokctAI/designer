@@ -16,7 +16,7 @@
 
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { RiLoader4Line } from "@remixicon/react";
 import { use, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -50,7 +50,7 @@ export default function PrintJobPage({ params }: { params: Promise<{ job: string
   if (!job) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin" />
+        <RiLoader4Line className="h-6 w-6 animate-spin" />
       </div>
     );
   }
@@ -123,7 +123,7 @@ export default function PrintJobPage({ params }: { params: Promise<{ job: string
           Save
         </Button>
         <Button onClick={makeReady} disabled={busy}>
-          {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {busy && <RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />}
           Make press-ready
         </Button>
       </div>
