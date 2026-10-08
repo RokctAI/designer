@@ -23,9 +23,10 @@
    "fieldname": "role",
    "fieldtype": "Select",
    "label": "Role",
-   "options": "primary\naccent\nink\nmuted\nsurface\nother",
+   "options": "primary\nsecondary\naccent\nink\ntext\nsurface\nbackground\nmuted\nother",
    "default": "other",
-   "in_list_view": 1
+   "in_list_view": 1,
+   "description": "What the colour is for. Engines use it: role-aware snapping, text contrast, product palettes. 'muted' is a legacy option no consumer reads"
   },
   {
    "fieldname": "derived",
@@ -35,7 +36,7 @@
    "description": "Generated from the seed colors by derive_design_system; still an ordinary editable row"
   }
  ],
- "modified": "2026-08-13 09:00:00.000000",
+ "modified": "2026-10-08 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "{module_name}",
  "owner": "Administrator",

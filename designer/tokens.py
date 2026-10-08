@@ -105,7 +105,34 @@ class DesignSystem:
         return None
 
 
+# Sections an extension may never add to: identity and the palette are
+# defined by the core contract alone.
+_EXTENSION_PROTECTED = ("name", "schema_version", "brand", "color", "extensions")
+
+
+def _fill_from_extension(data: dict, extension: dict, top: bool = True) -> dict:
+    """Copy keys from ``extension`` that ``data`` lacks, recursing into
+    maps. Never overwrites and never touches the palette, so the core
+    contract stays the one source of truth and the extension can only
+    add designer-only settings."""
+    merged = dict(data)
+    for key, value in extension.items():
+        if top and key in _EXTENSION_PROTECTED:
+            continue
+        if key not in merged:
+            merged[key] = value
+        elif isinstance(merged[key], dict) and isinstance(value, dict):
+            merged[key] = _fill_from_extension(merged[key], value, top=False)
+    return merged
+
+
 def _parse_system(data: dict) -> DesignSystem:
+    # Canonical design-system documents (docs/DESIGN_SYSTEM_CONTRACT.md)
+    # keep settings only this engine understands under
+    # extensions.designer; other products' namespaces are ignored.
+    extension = (data.get("extensions") or {}).get("designer")
+    if isinstance(extension, dict):
+        data = _fill_from_extension(data, extension)
     system = DesignSystem(name=data.get("name", "Unnamed system"))
 
     color_cfg = data.get("color", {}) or {}

@@ -129,9 +129,49 @@
    "fieldtype": "Int",
    "label": "Gradient Max Stops",
    "default": "4"
+  },
+  {
+   "fieldname": "print_section",
+   "fieldtype": "Section Break",
+   "label": "Print",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "print_bleed",
+   "fieldtype": "Float",
+   "label": "Print Bleed",
+   "default": "0",
+   "description": "px beyond the trim edge; 0 = no bleed requirement"
+  },
+  {
+   "fieldname": "print_min_stroke",
+   "fieldtype": "Float",
+   "label": "Print Min Stroke",
+   "default": "0",
+   "description": "Thinnest line the press can hold, px; 0 = unchecked"
+  },
+  {
+   "fieldname": "print_max_ink_coverage",
+   "fieldtype": "Float",
+   "label": "Print Max Ink Coverage",
+   "default": "0",
+   "description": "Total CMYK ink %; 0 = unchecked"
+  },
+  {
+   "fieldname": "extensions_section",
+   "fieldtype": "Section Break",
+   "label": "Product Extensions",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "extensions",
+   "fieldtype": "Table",
+   "label": "Extensions",
+   "options": "Design System Extension",
+   "description": "Product-specific settings, one row per product namespace (e.g. designer). Products ignore namespaces that are not theirs"
   }
  ],
- "modified": "2026-08-13 09:00:00.000000",
+ "modified": "2026-10-08 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "{module_name}",
  "owner": "Administrator",

@@ -38,6 +38,7 @@ MODULES = [
 
 EXPECTED_DOCTYPES = [
     "Design System", "Design Color Token", "Design Font",
+    "Design System Extension",
     "Design Request", "Design Candidate", "Design Candidate Revision",
     "Design Approval", "Design Campaign", "Design Campaign Format",
     "Generation Provider", "Design Print Job", "Design Studio Settings",
@@ -141,7 +142,7 @@ def test_doctype_folders_follow_convention():
 
 
 def test_doctype_permissions_and_flags():
-    child_tables = {"Design Color Token", "Design Font",
+    child_tables = {"Design Color Token", "Design Font", "Design System Extension",
                     "Design Campaign Format", "Document Request Output"}
     for _, data in _doctype_jsons():
         if data["name"] in child_tables:
