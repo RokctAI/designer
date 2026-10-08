@@ -1,0 +1,30 @@
+{
+ "name": "Design System Extension",
+ "engine": "InnoDB",
+ "creation": "2026-10-08 09:00:00.000000",
+ "doctype": "DocType",
+ "fields": [
+  {
+   "fieldname": "namespace",
+   "fieldtype": "Data",
+   "label": "Namespace",
+   "reqd": 1,
+   "in_list_view": 1,
+   "description": "Lowercase product name that owns this data, e.g. designer, web, docs"
+  },
+  {
+   "fieldname": "data",
+   "fieldtype": "JSON",
+   "label": "Data",
+   "description": "JSON object read only by that product; never overrides the core fields"
+  }
+ ],
+ "modified": "2026-10-08 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "{module_name}",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "istable": 1
+}

@@ -149,6 +149,8 @@ def process_design_request(name: str):
     except Exception as exc:
         _fail(req, f"Design system error: {exc}")
         return
+    req.db_set("design_system_fingerprint",
+               engine_dict_lib.fingerprint(system_dict))
 
     settings = _settings()
     max_dim = int(settings.max_dim or 1024)

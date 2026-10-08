@@ -19,7 +19,7 @@
 // (cmd co-location rule, SDK_ECOSYSTEM.md).
 
 import { paasCall } from "@/app/services/base/platform-gateway";
-import type { DesignSystem, Format, PaletteColour } from "@/app/actions/studio/systems/types";
+import type { DesignSystem, DesignSystemDocument, Format, PaletteColour } from "@/app/actions/studio/systems/types";
 
 export class SystemService {
   static list() {
@@ -36,6 +36,24 @@ export class SystemService {
       seed_colors: JSON.stringify(seedColors),
       name,
       customer,
+    });
+  }
+
+  /** Import a canonical design-system document (the YAML/JSON schema). */
+  static create(system: DesignSystemDocument, name?: string, customer?: string) {
+    return paasCall<DesignSystem>("api.design_system.create_design_system", {
+      system: JSON.stringify(system),
+      name,
+      customer,
+    });
+  }
+
+  /** JSON merge patch over the canonical document; null removes a key. */
+  static update(name: string, patch: Partial<DesignSystemDocument>, expectedFingerprint?: string) {
+    return paasCall<DesignSystem>("api.design_system.update_design_system", {
+      name,
+      patch: JSON.stringify(patch),
+      expected_fingerprint: expectedFingerprint,
     });
   }
 

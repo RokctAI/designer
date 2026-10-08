@@ -46,6 +46,13 @@
    "reqd": 1
   },
   {
+   "fieldname": "design_system_fingerprint",
+   "fieldtype": "Data",
+   "label": "Design System Fingerprint",
+   "read_only": 1,
+   "description": "Fingerprint of the Design System definition this request was processed against (get_design_system returns the current one)"
+  },
+  {
    "fieldname": "format",
    "fieldtype": "Data",
    "label": "Format",
@@ -124,7 +131,7 @@
    "description": "Optional billing hook; quotes/payments live in the host app"
   }
  ],
- "modified": "2026-08-13 09:00:00.000000",
+ "modified": "2026-10-08 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "{module_name}",
  "owner": "Administrator",

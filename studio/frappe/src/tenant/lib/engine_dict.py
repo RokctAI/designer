@@ -12,7 +12,13 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""Design System DocType -> engine schema mapping (SAAS_SPEC section 7).
+"""Design System DocType <-> canonical design-system document.
+
+The canonical document is the product-neutral contract described in
+``docs/DESIGN_SYSTEM_CONTRACT.md``: the same mapping the system YAML
+files hold, versioned by ``schema_version``. Designer, StartupOS and
+any future product read it and ignore what they don't understand;
+product-only settings live under ``extensions.<product>``.
 
 Pure mapping, no I/O. The output of :func:`engine_dict_from_doc` must
 round-trip through ``designer.tokens.system_from_dict`` without error.
@@ -20,13 +26,43 @@ round-trip through ``designer.tokens.system_from_dict`` without error.
 
 from __future__ import annotations
 
+import copy
+import hashlib
+import json
 import re
 from typing import Any
 
 HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+NAMESPACE_RE = re.compile(r"^[a-z][a-z0-9_-]{0,39}$")
 
 DEFAULT_TYPE_SCALE = "12,14,16,20,24,32,48,64"
 DEFAULT_STROKE_WIDTHS = "1,2,4,8"
+
+# Version of the canonical document's shape. Bump only for a change an
+# existing reader would misread; adding an optional section is not one.
+SCHEMA_VERSION = 1
+
+# What a color is FOR. Must match the Design Color Token "role" Select
+# options; "muted" is a legacy option no reader assigns meaning to.
+COLOR_ROLES = ("primary", "secondary", "accent", "ink", "text",
+               "surface", "background", "muted", "other")
+
+# Scalar DocType fields the canonical document carries. A document that
+# omits one means "use the default", which an empty field also means.
+CORE_SCALAR_FIELDS = ("max_colors", "snap_warning_distance", "type_scale",
+                      "grid", "min_element_size", "stroke_widths",
+                      "gradient_allowed", "gradient_max_stops",
+                      "min_contrast_text", "min_contrast_large_text",
+                      "large_text_size", "print_bleed", "print_min_stroke",
+                      "print_max_ink_coverage", "brand_name")
+
+# Settings the Designer engine reads that are not part of the core
+# contract. On import they are kept under extensions.designer (which
+# the engine reads back) instead of being dropped.
+DESIGNER_ONLY_PATHS = (("layout", "alignment_tolerance"),
+                       ("layout", "role_aware_snapping"),
+                       ("print", "icc_profile"),
+                       ("formats",))
 
 
 def is_valid_hex(value: str) -> bool:
@@ -76,6 +112,11 @@ def validate_system_fields(doc: Any) -> list[str]:
                 f"Color token {name!r}: {hexval!r} is not a 6-digit hex "
                 "color like #1a56db"
             )
+        role = _get(row, "role", "other") or "other"
+        if role not in COLOR_ROLES:
+            problems.append(
+                f"Color token {name!r}: role {role!r} is not one of "
+                + ", ".join(COLOR_ROLES))
     for i in (1, 2, 3):
         seed = _get(doc, f"seed_color_{i}", "")
         if seed and not is_valid_hex(str(seed)):
@@ -87,7 +128,36 @@ def validate_system_fields(doc: Any) -> list[str]:
             parse_csv_floats(str(_get(doc, field, "") or ""), label)
         except ValueError as exc:
             problems.append(str(exc))
+    seen: set[str] = set()
+    for row in _get(doc, "extensions", []) or []:
+        namespace = str(_get(row, "namespace", "") or "")
+        if not NAMESPACE_RE.match(namespace):
+            problems.append(
+                f"Extension namespace {namespace!r} must be a lowercase "
+                "product name like 'designer' or 'web'")
+        elif namespace in seen:
+            problems.append(f"Extension namespace {namespace!r} is repeated")
+        seen.add(namespace)
+        try:
+            _extension_data(row)
+        except ValueError as exc:
+            problems.append(f"Extension {namespace!r}: {exc}")
     return problems
+
+
+def _extension_data(row: Any) -> dict:
+    """An extension row's data as a dict (stored as a JSON field)."""
+    data = _get(row, "data", None)
+    if data in (None, ""):
+        return {}
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except ValueError:
+            raise ValueError("data is not valid JSON") from None
+    if not isinstance(data, dict):
+        raise ValueError("data must be a JSON object")
+    return data
 
 
 def engine_dict_from_doc(doc: Any) -> dict:
@@ -111,6 +181,7 @@ def engine_dict_from_doc(doc: Any) -> dict:
              if str(_get(row, "font_name", "")).strip()]
 
     data: dict = {
+        "schema_version": SCHEMA_VERSION,
         "name": str(_get(doc, "system_name", "Unnamed system")),
         "color": {
             "tokens": tokens,
@@ -132,7 +203,18 @@ def engine_dict_from_doc(doc: Any) -> dict:
                 _get(doc, "min_contrast_large_text", 3.0) or 3.0),
             "large_text_size": float(_get(doc, "large_text_size", 24) or 24),
         },
+        # 0 = no requirement / unchecked, which is also what a system
+        # without these fields meant before they existed.
+        "print": {
+            "bleed": float(_get(doc, "print_bleed", 0) or 0),
+            "min_stroke": float(_get(doc, "print_min_stroke", 0) or 0),
+            "max_ink_coverage": float(
+                _get(doc, "print_max_ink_coverage", 0) or 0),
+        },
     }
+    brand_name = str(_get(doc, "brand_name", "") or "").strip()
+    if brand_name:
+        data["brand"] = {"name": brand_name}
 
     scale = parse_csv_floats(
         str(_get(doc, "type_scale", DEFAULT_TYPE_SCALE) or DEFAULT_TYPE_SCALE),
@@ -151,7 +233,35 @@ def engine_dict_from_doc(doc: Any) -> dict:
         data["typography"] = typography
     if widths:
         data["stroke"] = {"widths": widths}
+    extensions = {str(_get(row, "namespace")): _extension_data(row)
+                  for row in _get(doc, "extensions", []) or []
+                  if _get(row, "namespace")}
+    if extensions:
+        data["extensions"] = extensions
     return data
+
+
+def fingerprint(system: dict) -> str:
+    """Content identity of a canonical document: equal documents give
+    equal fingerprints whatever their key order. A consumer records it
+    to know exactly which definition it used."""
+    body = json.dumps(system, sort_keys=True, separators=(",", ":"),
+                      ensure_ascii=False, default=str)
+    return "sha256:" + hashlib.sha256(body.encode("utf-8")).hexdigest()
+
+
+def merge_patch(target: dict, patch: dict) -> dict:
+    """RFC 7386 JSON merge patch: maps merge, ``None`` removes a key,
+    anything else (lists included) replaces. Returns a new dict."""
+    result = copy.deepcopy(target) if isinstance(target, dict) else {}
+    for key, value in (patch or {}).items():
+        if value is None:
+            result.pop(key, None)
+        elif isinstance(value, dict):
+            result[key] = merge_patch(result.get(key, {}), value)
+        else:
+            result[key] = copy.deepcopy(value)
+    return result
 
 
 def parse_seed_colors(value) -> list[str]:
@@ -182,8 +292,11 @@ def doc_fields_from_engine_dict(data: dict, derived: bool = True) -> dict:
     """Inverse of :func:`engine_dict_from_doc`: engine schema dict ->
     Design System DocType field values (child tables as lists of dicts).
     Used by derive_design_system to persist an engine-derived system as
-    ordinary, editable rows."""
-    color = (data or {}).get("color", {}) or {}
+    ordinary, editable rows, and by create/update_design_system to
+    import a canonical document. Designer-only settings outside the
+    core fields go to ``extensions.designer`` rather than being lost."""
+    data = _with_designer_settings_in_extension(data or {})
+    color = data.get("color", {}) or {}
     tokens = color.get("tokens", {}) or {}
     rows = []
     for name, value in tokens.items():
@@ -228,7 +341,46 @@ def doc_fields_from_engine_dict(data: dict, derived: bool = True) -> dict:
         fields["min_contrast_large_text"] = float(a11y["min_contrast_large_text"])
     if a11y.get("large_text_size") is not None:
         fields["large_text_size"] = float(a11y["large_text_size"])
+    print_cfg = data.get("print", {}) or {}
+    for key, field in (("bleed", "print_bleed"),
+                       ("min_stroke", "print_min_stroke"),
+                       ("max_ink_coverage", "print_max_ink_coverage")):
+        if print_cfg.get(key) is not None:
+            fields[field] = float(print_cfg[key])
+    brand = data.get("brand", {}) or {}
+    if brand.get("name"):
+        fields["brand_name"] = str(brand["name"])
+    extensions = data.get("extensions", {}) or {}
+    if extensions:
+        fields["extensions"] = [
+            {"namespace": str(ns), "data": json.dumps(value, sort_keys=True)}
+            for ns, value in extensions.items()]
     return fields
+
+
+def _with_designer_settings_in_extension(data: dict) -> dict:
+    """Move DESIGNER_ONLY_PATHS into extensions.designer. A value the
+    document already sets in extensions.designer wins over the legacy
+    location."""
+    data = copy.deepcopy(data)
+    moved: dict = {}
+    for path in DESIGNER_ONLY_PATHS:
+        parent = data
+        for key in path[:-1]:
+            parent = parent.get(key) if isinstance(parent, dict) else None
+        if not isinstance(parent, dict) or path[-1] not in parent:
+            continue
+        value = parent.pop(path[-1])
+        node = moved
+        for key in path[:-1]:
+            node = node.setdefault(key, {})
+        node[path[-1]] = value
+    if moved:
+        extensions = data.setdefault("extensions", {}) or {}
+        data["extensions"] = extensions
+        extensions["designer"] = merge_patch(moved,
+                                             extensions.get("designer") or {})
+    return data
 
 
 def _fmt_num(value) -> str:

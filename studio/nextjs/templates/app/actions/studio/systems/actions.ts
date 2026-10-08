@@ -20,6 +20,7 @@
 import { revalidatePath } from "next/cache";
 
 import { SystemService } from "@/app/services/all/studio/systems";
+import type { DesignSystemDocument } from "@/app/actions/studio/systems/types";
 
 export async function listDesignSystems() {
   try {
@@ -37,6 +38,23 @@ export async function getDesignSystem(name: string) {
 export async function deriveDesignSystem(seedColors: string[], name: string, customer?: string) {
   const out = await SystemService.derive(seedColors, name, customer);
   revalidatePath("/studio/systems");
+  return out;
+}
+
+export async function createDesignSystem(system: DesignSystemDocument, name?: string, customer?: string) {
+  const out = await SystemService.create(system, name, customer);
+  revalidatePath("/studio/systems");
+  return out;
+}
+
+export async function updateDesignSystem(
+  name: string,
+  patch: Partial<DesignSystemDocument>,
+  expectedFingerprint?: string,
+) {
+  const out = await SystemService.update(name, patch, expectedFingerprint);
+  revalidatePath("/studio/systems");
+  revalidatePath(`/studio/systems/${name}`);
   return out;
 }
 

@@ -84,9 +84,10 @@ studio/
 
 | DocType | Role |
 |---|---|
-| **Design System** | Per-client brand standard: color tokens, fonts, type scale, grid, strokes, contrast, gradients. `as_engine_dict()` round-trips through `designer.tokens.system_from_dict`. `customer` links the client (Customer comes from ERPNext in the composed site). |
+| **Design System** | Per-client brand standard: color tokens, fonts, type scale, grid, strokes, contrast, gradients, print limits. Serializes to the product-neutral canonical document (`docs/DESIGN_SYSTEM_CONTRACT.md`); `as_engine_dict()` round-trips through `designer.tokens.system_from_dict`. `customer` links the client (Customer comes from ERPNext in the composed site). |
 | Design Color Token (child) | `token_name`, `hex`, `role`, `derived` flag for seed-derived rows. |
 | Design Font (child) | `font_name` + prompt `descriptor`. |
+| Design System Extension (child) | `namespace` + JSON `data`: settings only one product reads (e.g. `designer`); never overrides core fields. |
 | **Design Request** | One job. `source_mode` = "Uploaded Artwork" (primary path today: engine comply/score on attached files) or "Generated" (provider pipeline; AI providers land later). Status machine Draft → Queued → Processing → Ready → Delivered, any → Failed. Optional `sales_order` / `sales_invoice` billing hooks. |
 | **Design Candidate** | One artifact: raw file, compliant SVG, score before/after, verbatim engine report, passed/selected flags, `revision_of` self-link. |
 | **Design Candidate Revision** | Undo history: every guardrailed-editor save creates one; the candidate's `compliant_svg` always points at the latest passing revision. |
@@ -120,8 +121,9 @@ fails with a clear message instead of a stack trace.
   spend), `audit_upload`, `save_candidate_edit`,
   `render_deliverable(candidate, format, cmyk=1, marks=1)` (press-ready
   CMYK vector PDF via the engine).
-- Systems: `derive_design_system`, `list_design_systems`,
-  `get_design_system`, `extract_palette`, `list_formats`.
+- Systems: `derive_design_system`, `create_design_system` (import a
+  canonical document), `update_design_system` (JSON merge patch),
+  `list_design_systems`, `get_design_system`, `extract_palette`, `list_formats`.
 - Campaigns: `create_campaign`, `start_campaign`,
   `get_campaign_status`, `list_campaigns`.
 - Approvals: `create_approval_link` (authenticated), plus

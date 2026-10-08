@@ -39,15 +39,25 @@ def list_design_systems():
 
 @frappe.whitelist()
 def get_design_system(name):
-    """Full JSON that drives the editor's constrained controls."""
+    """Full JSON that drives the editor's constrained controls.
+
+    ``system`` is the canonical document (docs/DESIGN_SYSTEM_CONTRACT.md)
+    that every product reads; ``fingerprint`` identifies this exact
+    definition so a consumer can record what it used. The other keys
+    are the editor's original shape, kept for existing callers."""
     doc = frappe.get_doc("Design System", name)
     require("Design System", "read", doc=doc)
+    system = engine_dict_lib.engine_dict_from_doc(doc)
     return {
         "name": doc.name,
         "system_name": doc.system_name,
         "brand_name": doc.brand_name,
         "customer": doc.customer,
-        "tokens": [{"name": t.token_name, "hex": t.hex, "role": t.role}
+        "is_default": bool(doc.is_default),
+        "seed_colors": [c for c in (doc.seed_color_1, doc.seed_color_2,
+                                    doc.seed_color_3) if c],
+        "tokens": [{"name": t.token_name, "hex": t.hex, "role": t.role,
+                    "derived": bool(t.derived)}
                    for t in (doc.color_tokens or [])],
         "fonts": [{"name": f.font_name, "descriptor": f.descriptor}
                   for f in (doc.fonts or [])],
@@ -60,7 +70,92 @@ def get_design_system(name):
         "contrast": {"min_text": doc.min_contrast_text,
                      "min_large_text": doc.min_contrast_large_text,
                      "large_text_size": doc.large_text_size},
+        "schema_version": engine_dict_lib.SCHEMA_VERSION,
+        "fingerprint": engine_dict_lib.fingerprint(system),
+        "modified": str(doc.modified),
+        "system": system,
     }
+
+
+def _parse_system_arg(system) -> dict:
+    """A canonical document passed as a dict or JSON string."""
+    import json
+
+    if isinstance(system, str):
+        try:
+            system = json.loads(system)
+        except ValueError:
+            frappe.throw("system is not valid JSON")
+    if not isinstance(system, dict):
+        frappe.throw("system must be a design-system document (a JSON object)")
+    version = system.get("schema_version", engine_dict_lib.SCHEMA_VERSION)
+    if version != engine_dict_lib.SCHEMA_VERSION:
+        frappe.throw(f"Unsupported design-system schema_version {version!r}; "
+                     f"this site reads version {engine_dict_lib.SCHEMA_VERSION}")
+    return system
+
+
+@frappe.whitelist()
+def create_design_system(system, name=None, customer=None):
+    """Create a Design System from a canonical document — the same
+    mapping a system YAML file holds (import path for YAML/CI fixtures
+    and agents). Token rows are stored as hand-made, not derived."""
+    require("Design System", "create")
+    system = _parse_system_arg(system)
+    name = name or system.get("name")
+    if not name:
+        frappe.throw("Give the Design System a name")
+    if frappe.db.exists("Design System", name):
+        frappe.throw(f"Design System {name} already exists")
+    fields = engine_dict_lib.doc_fields_from_engine_dict(system, derived=False)
+    fields.update({"doctype": "Design System", "system_name": name,
+                   "customer": customer})
+    doc = frappe.get_doc(fields)
+    doc.insert()
+    return get_design_system(doc.name)
+
+
+@frappe.whitelist()
+def update_design_system(name, patch, expected_fingerprint=None):
+    """Change a Design System with a JSON merge patch (RFC 7386) over
+    its canonical document: maps merge, null removes a key (a token, a
+    whole extension namespace), lists and values replace. Examples:
+    ``{"color": {"tokens": {"accent": {"hex": "#ff6600"}}}}``,
+    ``{"color": {"tokens": {"neutral-100": null}}}``,
+    ``{"typography": {"fonts": ["Outfit", "sans-serif"]}}``.
+
+    ``expected_fingerprint`` (optional) rejects the change if someone
+    else edited the system since the caller read it. A token whose hex
+    is unchanged keeps its ``derived`` flag; edited tokens become
+    hand-made. Returns the updated system (get_design_system shape)."""
+    doc = frappe.get_doc("Design System", name)
+    require("Design System", "write", doc=doc)
+    patch = _parse_system_arg(patch)
+    current = engine_dict_lib.engine_dict_from_doc(doc)
+    if expected_fingerprint and \
+            expected_fingerprint != engine_dict_lib.fingerprint(current):
+        frappe.throw("This design system changed since you read it; "
+                     "reload it and apply the change again")
+    patch = {k: v for k, v in patch.items()
+             if k not in ("name", "schema_version")}
+    merged = engine_dict_lib.merge_patch(current, patch)
+    fields = engine_dict_lib.doc_fields_from_engine_dict(merged, derived=False)
+
+    was_derived = {(t.token_name, (t.hex or "").lower())
+                   for t in (doc.color_tokens or []) if t.derived}
+    for row in fields["color_tokens"]:
+        row["derived"] = 1 if (row["token_name"], row["hex"].lower()) \
+            in was_derived else 0
+    descriptors = {f.font_name: f.descriptor for f in (doc.fonts or [])}
+    for row in fields.get("fonts", []):
+        row["descriptor"] = descriptors.get(row["font_name"])
+
+    for table in ("color_tokens", "fonts", "extensions"):
+        doc.set(table, fields.pop(table, []))
+    for field in engine_dict_lib.CORE_SCALAR_FIELDS:
+        doc.set(field, fields.get(field))
+    doc.save()
+    return get_design_system(doc.name)
 
 
 @frappe.whitelist()

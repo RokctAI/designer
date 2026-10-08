@@ -119,7 +119,8 @@ Naming: `field:system_name`.
 
 Child **Design Color Token**: `token_name` (Data, reqd), `hex` (Data,
 reqd — validate `^#[0-9a-fA-F]{6}$` on save), `role` (Select:
-primary/accent/ink/muted/surface/other; informational).
+primary/secondary/accent/ink/text/surface/background/muted/other;
+used by role-aware snapping, see `docs/DESIGN_SYSTEM_CONTRACT.md`).
 
 Child **Design Font**: `font_name` (Data, reqd).
 

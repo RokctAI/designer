@@ -24,6 +24,7 @@ import frappe
 
 from .. import engine_bridge, pipeline
 from ..lib import gating
+from ..lib.engine_dict import fingerprint
 from ._common import (candidate_rows, file_disk_path, require,
                       resolve_design_system, system_dict_for)
 
@@ -177,9 +178,10 @@ def comply_upload(file_url, design_system=None, n_colors=6, format=None):
     if format:
         engine_bridge.validate_format(format)
     settings = frappe.get_cached_doc("Design Studio Settings")
+    system_dict = system_dict_for(system_name)
 
     result = engine_bridge.comply_file(
-        file_disk_path(file_url), system_dict_for(system_name),
+        file_disk_path(file_url), system_dict,
         n_colors=int(n_colors), max_dim=int(settings.max_dim or 1024),
         format=format)
 
@@ -188,6 +190,7 @@ def comply_upload(file_url, design_system=None, n_colors=6, format=None):
         "title": "Comply upload",
         "source_mode": "Uploaded Artwork",
         "design_system": system_name,
+        "design_system_fingerprint": fingerprint(system_dict),
         "format": format or "logo",
         "n_candidates": 1,
         "min_score": float(settings.default_min_score or 95),
