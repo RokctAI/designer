@@ -20,10 +20,10 @@
    "fieldname": "source_mode",
    "fieldtype": "Select",
    "label": "Source Mode",
-   "options": "Uploaded Artwork\nGenerated",
+   "options": "Uploaded Artwork\nGenerated\nTemplate",
    "default": "Uploaded Artwork",
    "reqd": 1,
-   "description": "Uploaded Artwork runs the compliance engine on files attached to this request; Generated calls a Generation Provider (AI generation is a later milestone)"
+   "description": "Uploaded Artwork runs the compliance engine on files attached to this request; Generated calls a Generation Provider (AI generation is a later milestone); Template places the merchant's own text, prices and photos into a poster template by code"
   },
   {
    "fieldname": "prompt",
@@ -37,6 +37,18 @@
    "label": "Composed Prompt",
    "read_only": 1,
    "description": "Full prompt composed from the design system; kept for reproducibility (FRONTEND_SPEC 1)"
+  },
+  {
+   "fieldname": "template",
+   "fieldtype": "Data",
+   "label": "Template",
+   "description": "Poster template name (list_templates); used when source_mode is Template"
+  },
+  {
+   "fieldname": "template_data",
+   "fieldtype": "JSON",
+   "label": "Template Data",
+   "description": "Slot content for Template mode: {fields, images, items, background_prompt} (SAAS_SPEC 2.2.1)"
   },
   {
    "fieldname": "design_system",

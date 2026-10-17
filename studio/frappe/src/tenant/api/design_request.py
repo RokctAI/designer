@@ -54,11 +54,13 @@ def _parse_list(value):
 def create_design_request(prompt=None, design_system=None, format="logo",
                           n_candidates=None, min_score=None, provider=None,
                           source_mode="Uploaded Artwork", customer=None,
-                          title=None, file_urls=None):
+                          title=None, file_urls=None, template=None,
+                          template_data=None):
     """Create a request. Generated mode needs a prompt; Uploaded Artwork
     mode takes ``file_urls`` (JSON list of already-uploaded private
-    files) — the request is enqueued as soon as it has a source.
-    Returns {"name"}.
+    files); Template mode takes ``template`` + ``template_data`` (JSON,
+    SAAS_SPEC 2.2.1) and refuses missing required slots up front — the
+    request is enqueued as soon as it has a source. Returns {"name"}.
     """
     require("Design Request", "create")
     engine_bridge.validate_format(format)
@@ -71,12 +73,28 @@ def create_design_request(prompt=None, design_system=None, format="logo",
     for url in urls:
         _require_upload_within_cap(url)
 
+    tdata = None
+    if source_mode == "Template":
+        tdata = _parse_template_data(template_data)
+        try:
+            engine_bridge.check_template_data(template or "", tdata)
+        except engine_bridge.EngineError as exc:
+            frappe.throw(str(exc))
+        for url in _template_file_urls(tdata):
+            _require_upload_within_cap(url)
+        # Posters render on the template's own canvas.
+        format = "a4-poster"
+
     doc = frappe.get_doc({
         "doctype": "Design Request",
-        "title": (title or (prompt or "")[:60] or None),
+        "title": (title or (prompt or "")[:60]
+                  or ((tdata or {}).get("fields") or {}).get("headline")
+                  or None),
         "prompt": prompt,
         "customer": customer,
         "source_mode": source_mode,
+        "template": template if source_mode == "Template" else None,
+        "template_data": json.dumps(tdata) if tdata is not None else None,
         "design_system": resolve_design_system(design_system, customer),
         "format": format,
         "n_candidates": gating.clamp_n_candidates(
@@ -91,7 +109,7 @@ def create_design_request(prompt=None, design_system=None, format="logo",
     })
     doc.insert()
 
-    for url in urls:
+    for url in urls + _template_file_urls(tdata or {}):
         fname = frappe.db.get_value("File", {"file_url": url}, "name")
         if not fname:
             frappe.throw(f"No File record for {url}")
@@ -101,12 +119,38 @@ def create_design_request(prompt=None, design_system=None, format="logo",
         fdoc.is_private = 1
         fdoc.save(ignore_permissions=True)
 
-    has_source = (source_mode == "Generated") or bool(urls)
+    has_source = source_mode in ("Generated", "Template") or bool(urls)
     if has_source:
         doc.db_set("status", "Queued")
         frappe.enqueue(pipeline.process_design_request, queue="long",
                        name=doc.name, job_name=f"design_request:{doc.name}")
     return {"name": doc.name}
+
+
+def _parse_template_data(value) -> dict:
+    if isinstance(value, str):
+        try:
+            value = json.loads(value or "{}")
+        except ValueError:
+            frappe.throw("template_data must be JSON")
+    if not isinstance(value, dict):
+        frappe.throw("template_data must be a JSON object")
+    return value
+
+
+def _template_file_urls(tdata: dict) -> list[str]:
+    urls = [u for u in (tdata.get("images") or {}).values() if u]
+    urls += [i.get("image_url") for i in tdata.get("items") or []
+             if isinstance(i, dict) and i.get("image_url")]
+    return [str(u) for u in urls]
+
+
+@frappe.whitelist()
+def list_templates():
+    """Poster templates for source_mode Template, with the slots a form
+    must offer and which of them each template requires."""
+    require("Design Request", "read")
+    return engine_bridge.list_poster_templates()
 
 
 @frappe.whitelist()

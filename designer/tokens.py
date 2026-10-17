@@ -55,6 +55,10 @@ class DesignSystem:
     name: str = "Unnamed system"
     colors: list[ColorToken] = field(default_factory=list)
     max_colors: int = 6
+    # Layout discipline limits; 0 = unchecked. Opt-in per system so
+    # existing brands are unaffected (merchant posters set 1 and 2).
+    max_accents: int = 0
+    max_font_families: int = 0
     # Snap threshold: if a color is farther than this (OKLab distance)
     # from every token, snapping is reported as an aggressive change.
     snap_warning_distance: float = 0.18
@@ -188,6 +192,12 @@ def _parse_system(data: dict) -> DesignSystem:
     )
     system.alignment_tolerance = float(
         layout_cfg.get("alignment_tolerance", system.alignment_tolerance)
+    )
+    # Under layout (not color/typography) so a canonical document can
+    # set them through extensions.designer: color is a protected section.
+    system.max_accents = int(layout_cfg.get("max_accents", system.max_accents) or 0)
+    system.max_font_families = int(
+        layout_cfg.get("max_font_families", system.max_font_families) or 0
     )
     system.role_aware_snapping = bool(
         layout_cfg.get("role_aware_snapping", system.role_aware_snapping)

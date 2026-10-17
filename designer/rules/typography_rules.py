@@ -102,3 +102,43 @@ class TypeScaleRule(Rule):
                 finding.fix_description = f"font-size {size:g} -> {nearest:g}"
             findings.append(finding)
         return findings
+
+
+class FontFamilyCountRule(Rule):
+    """Two typefaces at most: a third family reads as clutter even when
+    every family is on the brand list. Off unless the system sets
+    ``layout.max_font_families``."""
+
+    id = "type.families"
+    description = "Distinct font families must not exceed the system's limit"
+
+    def run(self, doc: Document, system: DesignSystem, autofix: bool) -> list[Finding]:
+        limit = system.max_font_families
+        if limit <= 0:
+            return []
+        usage: dict[str, int] = {}
+        for shape in doc.shapes:
+            family = shape.get("font-family") if shape.tag == "text" else None
+            if family:
+                key = _first_family(family)
+                usage[key] = usage.get(key, 0) + len(shape.text or "")
+        if len(usage) <= limit:
+            return []
+        ranked = sorted(usage, key=lambda f: -usage[f])
+        keep, drop = ranked[:limit], set(ranked[limit:])
+        finding = Finding(
+            rule=self.id,
+            severity=Severity.WARNING,
+            message=(
+                f"{len(usage)} font families used; system allows {limit} "
+                f"(extra: {', '.join(sorted(drop))})"
+            ),
+        )
+        if autofix:
+            for shape in doc.shapes:
+                family = shape.get("font-family") if shape.tag == "text" else None
+                if family and _first_family(family) in drop:
+                    shape.set("font-family", keep[0])
+            finding.fixed = True
+            finding.fix_description = f"set extra families to '{keep[0]}'"
+        return [finding]

@@ -19,7 +19,7 @@
 // (cmd co-location rule, SDK_ECOSYSTEM.md).
 
 import { paasCall } from "@/app/services/base/platform-gateway";
-import type { NewDesignRequest, RequestStatus } from "@/app/actions/studio/requests/types";
+import type { NewDesignRequest, PosterTemplate, RequestStatus } from "@/app/actions/studio/requests/types";
 
 export class RequestService {
   static list(page = 1) {
@@ -30,7 +30,13 @@ export class RequestService {
     return paasCall<{ name: string }>("api.design_request.create_design_request", {
       ...values,
       file_urls: values.file_urls ? JSON.stringify(values.file_urls) : undefined,
+      template_data: values.template_data ? JSON.stringify(values.template_data) : undefined,
     });
+  }
+
+  /** Poster templates for source_mode "Template", with their slots. */
+  static templates() {
+    return paasCall<PosterTemplate[]>("api.design_request.list_templates", {});
   }
 
   static queue(name: string) {

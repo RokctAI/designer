@@ -283,3 +283,67 @@ class MaxColorsRule(Rule):
                 + ", ".join(f"{to_hex(c)} -> {to_hex(t)}" for c, t in remap.items())
             )
         return [finding]
+
+
+def _accent_hexes(system: DesignSystem) -> set[str]:
+    return {t.hex.lower() for t in system.tokens_for_role(ACCENT_ROLES)}
+
+
+class AccentCountRule(Rule):
+    """One accent, not five: a poster where every element is a
+    different brand color has no focal point. Counts the distinct
+    accent-role tokens painted (flat fills, strokes, gradient stops);
+    off unless the system sets ``layout.max_accents``."""
+
+    id = "color.accents"
+    description = "Distinct accent colors must not exceed the system's limit"
+
+    def run(self, doc: Document, system: DesignSystem, autofix: bool) -> list[Finding]:
+        limit = system.max_accents
+        accents = _accent_hexes(system)
+        if limit <= 0 or not accents:
+            return []
+        usage: dict[str, float] = {}
+        for shape in doc.shapes:
+            area = shape_area(shape, doc) or 1.0
+            for prop in _PAINT_PROPS:
+                raw = shape.get(prop)
+                grad = doc.gradient_by_ref(raw)
+                colors = [c for _, c in grad.stops] if grad is not None else [raw or ""]
+                for color in colors:
+                    rgb = parse_color(color)
+                    if rgb is None:
+                        continue
+                    hexed = to_hex(rgb).lower()
+                    if hexed in accents:
+                        usage[hexed] = usage.get(hexed, 0.0) + area
+        if len(usage) <= limit:
+            return []
+        ranked = sorted(usage, key=lambda c: -usage[c])
+        keep, drop = ranked[:limit], ranked[limit:]
+        finding = Finding(
+            rule=self.id,
+            severity=Severity.WARNING,
+            message=(
+                f"{len(usage)} accent colors used; system allows {limit} "
+                f"(extra: {', '.join(drop)})"
+            ),
+        )
+        if autofix:
+            # Every extra accent becomes the dominant one, so the design
+            # keeps its shapes but reads with a single accent.
+            target = keep[0]
+            for shape in doc.shapes:
+                for prop in _PAINT_PROPS:
+                    rgb = parse_color(shape.get(prop) or "")
+                    if rgb is not None and to_hex(rgb).lower() in drop:
+                        shape.set(prop, target)
+            for grad in doc.defs:
+                grad.stops = [
+                    (t, target if (rgb := parse_color(c)) is not None
+                     and to_hex(rgb).lower() in drop else c)
+                    for t, c in grad.stops
+                ]
+            finding.fixed = True
+            finding.fix_description = f"merged {', '.join(drop)} into {target}"
+        return [finding]

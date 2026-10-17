@@ -206,6 +206,75 @@ def render_candidate_pdf(svg_text: str, out_path: str, dpi: float = 300.0,
     return out_path
 
 
+def list_poster_templates() -> list[dict]:
+    """Poster template catalog (designer.posters.list_posters)."""
+    _engine_modules()
+    from designer.posters import list_posters
+
+    return list_posters()
+
+
+def check_template_data(name: str, data: dict) -> None:
+    """Refuse missing required slots before a request is queued, with a
+    message the merchant can act on. ``data`` is the template_data
+    payload (images/items may still be file urls here)."""
+    templates = {t["name"]: t for t in list_poster_templates()}
+    template = templates.get(name)
+    if template is None:
+        raise EngineError(f"Unknown poster template {name!r}")
+    fields = data.get("fields") or {}
+    images = data.get("images") or {}
+    for slot in template["slots"]:
+        if not slot["required"]:
+            continue
+        source = images if slot["kind"] == "image" else fields
+        if not str(source.get(slot["slot"]) or "").strip():
+            raise EngineError(f"{slot['label']} is required for this template")
+    items = template.get("items")
+    if items and items["required"] and not (data.get("items") or []):
+        raise EngineError("At least one item is required for this template")
+
+
+def render_template(name: str, data: dict, system_dict: dict) -> dict:
+    """Fill a poster template by code and comply it. ``data`` carries
+    image hrefs already resolved to data URIs. Same return shape as
+    comply_file; the image model is never involved here."""
+    designer, _, serialize, _, _ = _engine_modules()
+    from designer.posters import FORMAT, load_poster
+    from designer.template import (Item, TemplateData, TemplateError,
+                                   palette_for_system, render)
+
+    started = time.monotonic()
+    try:
+        system = designer.system_from_dict(system_dict)
+        template, cell = load_poster(name)
+        filled = render(template, TemplateData(
+            fields={k: str(v) for k, v in (data.get("fields") or {}).items()},
+            images=dict(data.get("images") or {}),
+            items=[Item(title=str(i.get("title") or ""),
+                        price=str(i.get("price") or ""),
+                        badge=str(i.get("badge") or ""),
+                        image_href=i.get("image_href"))
+                   for i in data.get("items") or []],
+            palette=palette_for_system(system),
+        ), system, cell_template=cell)
+        engine = designer.ComplianceEngine(system, format=FORMAT)
+        score_before = engine.audit(filled).score
+        report = engine.comply(filled)
+        svg_text = serialize(filled)
+    except TemplateError as exc:
+        raise EngineError(str(exc)) from exc
+    except Exception as exc:
+        raise EngineError(f"Template render failed: {exc}") from exc
+    return {
+        "svg": svg_text,
+        "score_before": float(score_before),
+        "score_after": float(report.score),
+        "report_json": report.to_json(),
+        "comply_ms": int((time.monotonic() - started) * 1000),
+    }
+
+
 def extract_palette(file_path: str, n: int = 6) -> list[dict]:
     """Palette extraction from an uploaded image (FRONTEND_SPEC 1.2)."""
     try:

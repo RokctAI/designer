@@ -26,6 +26,8 @@ Slot markers (plain attributes, so templates stay valid SVG):
   data-token="advertiser-1"   fill color comes from the caller's palette
   data-fit="shrink"           step down the type scale until the text fits
   data-optional="true"        may be dropped (see data-min-unit-width)
+  data-required="true"        refuse to render when this slot is empty
+  data-label="Pickup point"   human name for the slot (forms, errors)
   data-min-unit-width="400"   drop this slot below this canvas width
   data-freed-to="headline"    give the dropped slot's box to another slot
   data-region="items"         flow repeated item cells into this rectangle
@@ -174,6 +176,8 @@ def render(
     _fill_text(doc, data, system)
 
     region = _find_region(doc)
+    if region is not None and not data.items:
+        _require(region, "items")
     if region is not None:
         if cell_template is None:
             raise TemplateError(
@@ -266,6 +270,42 @@ def _grow_beneficiaries(doc: Document, freed: dict) -> None:
 # ---------------------------------------------------------- filling
 
 
+def _label(shape: Shape, slot: str) -> str:
+    return shape.attrs.get("data-label") or slot.replace("-", " ")
+
+
+def _require(shape: Shape, slot: str) -> None:
+    if _flag(shape, "data-required"):
+        raise TemplateError(f"{_label(shape, slot).capitalize()} is required for this template")
+
+
+def describe_slots(template: Document) -> list[dict]:
+    """The fillable slots of a template, in paint order, for building a
+    form: ``[{"slot", "kind", "label", "required"}]``. ``kind`` is
+    ``text`` or ``image``; an items region is reported as kind
+    ``items``."""
+    out: list[dict] = []
+    seen: set[str] = set()
+    for shape in template.shapes:
+        if shape.attrs.get("data-region") == "items":
+            slot, kind = "items", "items"
+        else:
+            slot = _slot(shape)
+            if not slot or shape.tag not in ("text", "image"):
+                continue
+            kind = shape.tag
+        if slot in seen:
+            continue
+        seen.add(slot)
+        out.append({
+            "slot": slot,
+            "kind": kind,
+            "label": _label(shape, slot),
+            "required": _flag(shape, "data-required"),
+        })
+    return out
+
+
 def _fill_images(doc: Document, data: TemplateData) -> None:
     survivors = []
     for shape in doc.shapes:
@@ -273,6 +313,7 @@ def _fill_images(doc: Document, data: TemplateData) -> None:
         if shape.tag == "image" and slot:
             href = data.images.get(slot)
             if not href:
+                _require(shape, slot)
                 continue  # nothing captured for this slot: leave it out
             shape.set("href", href)
             shape.set("preserveAspectRatio", "xMidYMid slice")  # center-crop
@@ -289,6 +330,7 @@ def _fill_text(doc: Document, data: TemplateData, system: DesignSystem) -> None:
             continue
         value = (data.fields.get(slot) or "").strip()
         if not value:
+            _require(shape, slot)
             continue  # empty slots leave no placeholder behind
         shape.text = value
         _fit_text(shape, system)

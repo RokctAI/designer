@@ -16,9 +16,9 @@
 and can optionally repair what it finds."""
 
 from designer.rules.base import Rule
-from designer.rules.color_rules import PaletteRule, GradientRule, MaxColorsRule
+from designer.rules.color_rules import AccentCountRule, PaletteRule, GradientRule, MaxColorsRule
 from designer.rules.geometry_rules import GridSnapRule, MinSizeRule, StrokeWidthRule, TransformRule
-from designer.rules.typography_rules import FontRule, TypeScaleRule
+from designer.rules.typography_rules import FontFamilyCountRule, FontRule, TypeScaleRule
 from designer.rules.accessibility import ContrastRule
 from designer.rules.capability import CapabilityRule
 from designer.rules.layout_rules import (
@@ -40,10 +40,12 @@ DEFAULT_RULES: list[Rule] = [
     PaletteRule(),
     GradientRule(),
     MaxColorsRule(),
+    AccentCountRule(),
     MinSizeRule(),
     StrokeWidthRule(),
     GridSnapRule(),
     FontRule(),
+    FontFamilyCountRule(),
     TypeScaleRule(),
     ContrastRule(),
     CollisionRule(),
@@ -62,11 +64,13 @@ __all__ = [
     "PaletteRule",
     "GradientRule",
     "MaxColorsRule",
+    "AccentCountRule",
     "GridSnapRule",
     "MinSizeRule",
     "StrokeWidthRule",
     "TransformRule",
     "FontRule",
+    "FontFamilyCountRule",
     "TypeScaleRule",
     "ContrastRule",
     "CanvasFormatRule",

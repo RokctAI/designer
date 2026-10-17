@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 794 1123" width="794" height="1123">
+  <!-- Event or collection day: the when and where are required. -->
+  <rect x="0" y="0" width="794" height="1123" fill="#f3f4f6" data-token="advertiser-4"/>
+  <image data-slot="background" data-label="Background" x="0" y="0" width="794" height="448"/>
+  <text data-slot="headline" data-label="Headline" data-required="true" data-fit="shrink" data-fit-width="634" data-fit-height="80"
+        x="80" y="536" font-size="64" font-weight="bold" fill="#111827" data-token="advertiser-3" font-family="DejaVu Sans">Headline</text>
+  <text data-slot="details" data-label="Details" data-fit="shrink" data-fit-width="634" data-fit-height="24"
+        x="80" y="584" font-size="20" fill="#111827" data-token="advertiser-3" font-family="DejaVu Sans">Details</text>
+  <rect x="80" y="624" width="634" height="232" fill="#ffffff" data-token="advertiser-6"/>
+  <rect x="80" y="624" width="8" height="232" fill="#1a56db" data-token="advertiser-1"/>
+  <text x="112" y="672" font-size="16" font-weight="bold" fill="#1a56db" data-token="advertiser-1" font-family="DejaVu Sans">WHEN</text>
+  <text data-slot="when" data-label="Date and time" data-required="true" data-fit="shrink" data-fit-width="578" data-fit-height="40"
+        x="112" y="712" font-size="32" font-weight="bold" fill="#111827" data-token="advertiser-3" font-family="DejaVu Sans">Date and time</text>
+  <text x="112" y="768" font-size="16" font-weight="bold" fill="#1a56db" data-token="advertiser-1" font-family="DejaVu Sans">WHERE</text>
+  <text data-slot="where" data-label="Venue or pickup point" data-required="true" data-fit="shrink" data-fit-width="578" data-fit-height="40"
+        x="112" y="808" font-size="32" font-weight="bold" fill="#111827" data-token="advertiser-3" font-family="DejaVu Sans">Venue</text>
+  <text data-slot="price" data-label="Price or entry" data-fit="shrink" data-fit-width="634" data-fit-height="64"
+        x="80" y="928" font-size="48" font-weight="bold" fill="#1a56db" data-token="advertiser-1" font-family="DejaVu Sans">R0</text>
+  <rect x="0" y="968" width="794" height="155" fill="#111827" data-token="advertiser-3"/>
+  <text data-slot="business" data-label="Business name" data-required="true" data-fit="shrink" data-fit-width="634" data-fit-height="40"
+        x="80" y="1040" font-size="32" font-weight="bold" fill="#ffffff" data-token="advertiser-6" font-family="DejaVu Sans">Business</text>
+  <text data-slot="contact" data-label="Contact (phone, WhatsApp, address)" data-fit="shrink" data-fit-width="634" data-fit-height="24"
+        x="80" y="1080" font-size="20" fill="#ffffff" data-token="advertiser-6" font-family="DejaVu Sans">Contact</text>
+</svg>

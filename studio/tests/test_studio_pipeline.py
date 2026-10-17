@@ -86,3 +86,31 @@ def test_failed_svg_save_rolls_back_the_candidate(env):
     assert "rollback" in log
     assert "commit" not in log
     assert log.index("insert:Design Candidate") < log.index("rollback")
+
+
+def test_template_mode_places_merchant_content_by_code(env, monkeypatch):
+    """Template mode never calls a provider without a background_prompt,
+    resolves photos to data URIs and renders one candidate."""
+    seen = {}
+
+    def fake_render(name, data, system_dict):
+        seen["name"], seen["data"] = name, data
+        return RESULT
+
+    monkeypatch.setattr(pipeline.engine_bridge, "render_template", fake_render)
+    monkeypatch.setattr(pipeline, "_data_uri", lambda url: f"data:{url}")
+    monkeypatch.setattr(pipeline, "get_provider",
+                        lambda doc: pytest.fail("provider must not be called"))
+    monkeypatch.setattr(frappe, "publish_realtime", lambda *a, **k: None,
+                        raising=False)
+    req = types.SimpleNamespace(
+        name="REQ-0002", min_score=90, template="menu", provider="mock",
+        requested_by="u", status="Processing",
+        template_data='{"fields": {"headline": "Menu"}, "images": {},'
+                      ' "items": [{"title": "Kota", "price": "R35",'
+                      ' "image_url": "/private/files/kota.jpg"}]}')
+    assert pipeline._process_template(req, {}) == 1
+    assert seen["name"] == "menu"
+    assert seen["data"]["fields"] == {"headline": "Menu"}
+    assert seen["data"]["items"][0]["image_href"] == "data:/private/files/kota.jpg"
+    assert "background" not in seen["data"]["images"]

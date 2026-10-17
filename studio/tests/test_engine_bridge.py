@@ -48,3 +48,18 @@ def test_truncated_image_becomes_engine_error(tmp_path):
     p.write_bytes(whole_path.read_bytes()[: whole_path.stat().st_size // 2])
     with pytest.raises(engine_bridge.EngineError, match="truncated.png"):
         engine_bridge.audit_file(str(p), SYSTEM)
+
+
+def test_check_template_data_refuses_missing_required_slot():
+    from studio_src import engine_bridge as eb
+
+    with pytest.raises(eb.EngineError, match="Venue or pickup point is required"):
+        eb.check_template_data("event", {"fields": {"headline": "Market", "when": "Sat",
+                                                    "business": "Juvo"}})
+    with pytest.raises(eb.EngineError, match="At least one item"):
+        eb.check_template_data("menu", {"fields": {"headline": "Menu", "business": "Juvo"}})
+    with pytest.raises(eb.EngineError, match="Unknown poster template"):
+        eb.check_template_data("nope", {})
+    # Optional slots may stay empty.
+    eb.check_template_data("event", {"fields": {"headline": "Market", "when": "Sat",
+                                                "where": "Shop 4", "business": "Juvo"}})
