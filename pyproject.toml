@@ -27,4 +27,4 @@ designer = "designer.cli:main"
 include = ["designer*"]
 
 [tool.setuptools.package-data]
-designer = ["systems/*.yaml"]
+designer = ["systems/*.yaml", "templates/posters/*.svg"]

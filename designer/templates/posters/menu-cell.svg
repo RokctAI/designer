@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 304 264" width="304" height="264">
+  <!-- One menu item: photo, name, price. -->
+  <rect x="0" y="0" width="304" height="264" fill="#ffffff" data-token="advertiser-6"/>
+  <image data-slot="photo" x="0" y="0" width="304" height="168"/>
+  <text data-slot="title" data-fit="shrink" data-fit-width="272" data-fit-height="24"
+        x="16" y="208" font-size="20" font-weight="bold" fill="#111827" data-token="advertiser-3" font-family="DejaVu Sans">Item</text>
+  <text data-slot="price" data-fit="shrink" data-fit-width="272" data-fit-height="24"
+        x="16" y="240" font-size="20" font-weight="bold" fill="#1a56db" data-token="advertiser-1" font-family="DejaVu Sans">R0</text>
+</svg>

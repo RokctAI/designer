@@ -23,6 +23,8 @@ attached to the request instead of calling a generation provider.
 
 from __future__ import annotations
 
+import base64
+import json
 import os
 import tempfile
 import time
@@ -157,8 +159,11 @@ def process_design_request(name: str):
     n_colors = int(req.n_colors or settings.default_n_colors or 6)
 
     try:
-        if (req.source_mode or "Uploaded Artwork") == "Uploaded Artwork":
+        mode = req.source_mode or "Uploaded Artwork"
+        if mode == "Uploaded Artwork":
             produced = _process_uploaded(req, system_dict, n_colors, max_dim)
+        elif mode == "Template":
+            produced = _process_template(req, system_dict)
         else:
             produced = _process_generated(req, system_dict, n_colors, max_dim)
     except Exception as exc:
@@ -204,6 +209,64 @@ def _process_uploaded(req, system_dict: dict, n_colors: int, max_dim: int) -> in
         _publish_progress(req, slot, 1, result["score_after"])
         produced += 1
     return produced
+
+
+def _data_uri(file_url: str) -> str:
+    """A private File as a data URI, so the candidate SVG is
+    self-contained (renders, prints and downloads without the bench)."""
+    path = _file_disk_path(file_url)
+    ext = os.path.splitext(path)[1].lower().lstrip(".")
+    mime = {"jpg": "jpeg", "svg": "svg+xml"}.get(ext, ext or "png")
+    with open(path, "rb") as fh:
+        payload = base64.b64encode(fh.read()).decode("ascii")
+    return f"data:image/{mime};base64,{payload}"
+
+
+def _template_background(req, prompt: str) -> str | None:
+    """The only place an image model touches a template poster: the
+    optional background slot. Any failure leaves the poster without a
+    background instead of failing the request."""
+    if not (prompt or "").strip() or not req.provider:
+        return None
+    try:
+        provider_doc = frappe.get_doc("Generation Provider", req.provider)
+        if not provider_doc.enabled:
+            return None
+        provider = get_provider(provider_doc)
+        png = provider.generate(provider.full_prompt(prompt), "1024x1024")
+    except Exception as exc:  # best-effort: no background, still a poster
+        frappe.log_error(str(exc), f"studio template background: {req.name}")
+        return None
+    return "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+
+
+def _process_template(req, system_dict: dict) -> int:
+    """Fill a poster template by code: the merchant's own text, prices
+    and photos go into fixed slots; nothing about the layout or the
+    words is left to a model. One deterministic candidate."""
+    raw = req.template_data or "{}"
+    data = json.loads(raw) if isinstance(raw, str) else dict(raw)
+    images = {slot: _data_uri(url)
+              for slot, url in (data.get("images") or {}).items() if url}
+    background = _template_background(req, data.get("background_prompt") or "")
+    if background:
+        images["background"] = background
+    items = []
+    for item in data.get("items") or []:
+        row = dict(item)
+        if row.get("image_url"):
+            row["image_href"] = _data_uri(row["image_url"])
+        items.append(row)
+    try:
+        result = engine_bridge.render_template(
+            req.template, {"fields": data.get("fields") or {},
+                           "images": images, "items": items}, system_dict)
+    except engine_bridge.EngineError as exc:
+        req.db_set("error_message", str(exc)[:500])
+        return 0
+    _create_candidate(req, 1, 1, result)
+    _publish_progress(req, 1, 1, result["score_after"])
+    return 1
 
 
 def _process_generated(req, system_dict: dict, n_colors: int, max_dim: int) -> int:

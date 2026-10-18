@@ -163,6 +163,43 @@ Status machine (single direction; enforced in controller):
 `Failed`. `Ready` means ≥1 candidate exists (passing or best-effort);
 `Delivered` means the user selected a candidate.
 
+### 2.2.1 Template mode (merchant posters)
+
+`source_mode="Template"` renders a poster from a slot template
+(`designer/templates/posters/*.svg`) with **code**, not the image model:
+the merchant's own text, prices and photos go into fixed slots, the
+type is fitted to its box, and the result runs through the compliance
+engine like any other candidate. The image model is only ever asked
+for the optional `background` image slot, and only when
+`background_prompt` is given and the request has a provider.
+
+Extra Design Request fields: `template` (Data, template name from
+`list_templates`) and `template_data` (JSON):
+
+```json
+{
+  "fields": {"headline": "Braai Pack Special", "price": "R199", "when": "Sat 12 Oct, 10:00-14:00", "where": "Pickup: Shop 4, Thohoyandou Mall"},
+  "images": {"photo": "/private/files/braai.jpg"},
+  "items": [{"title": "Kota", "price": "R35", "image_url": "/private/files/kota.jpg"}],
+  "background_prompt": "soft blurred market stalls"
+}
+```
+
+`images` and `items[].image_url` are private File urls from
+`upload_file`. A template's `required` slots must be filled or the
+request is refused before it is queued, so a poster can never go out
+without, for example, the pickup point the event template asks for.
+Posters that do not need a slot simply use a template without it.
+`create_design_request` stays backward compatible: callers that omit
+`template`/`template_data` behave exactly as before.
+
+Per-design-system layout limits (opt-in, under `extensions.designer`,
+default 0 = unchecked so existing systems are unaffected):
+
+```json
+{"layout": {"max_accents": 1, "max_font_families": 2}}
+```
+
 ### 2.3 Design Candidate (one generated+complied artifact)
 
 Naming: autoname `DC-.#####`.
@@ -249,11 +286,12 @@ Frontend-facing; small models implementing clients need exact shapes.
 
 | Method | Args | Returns |
 |---|---|---|
-| `create_design_request` | prompt, design_system=None, format="logo", n_candidates=2, min_score=None, provider=None | `{"name": "DR-00001"}` — creates doc, sets Queued, enqueues `process_design_request` on queue `long`. `format` is the engine format name (§2.2); it determines canvas, margins, min text size and the generation size request. |
+| `create_design_request` | prompt, design_system=None, format="logo", n_candidates=2, min_score=None, provider=None, source_mode="Uploaded Artwork", template=None, template_data=None | `{"name": "DR-00001"}` — creates doc, sets Queued, enqueues `process_design_request` on queue `long`. `format` is the engine format name (§2.2); it determines canvas, margins, min text size and the generation size request. |
 | `get_request_status` | name | `{"status", "error_message", "candidates": [{"name", "slot", "attempt", "score_before", "score_after", "passed", "selected", "svg_url", "raw_url"}]}` |
 | `select_candidate` | candidate | marks selected, request → Delivered; returns `{"svg_url"}` |
 | `comply_upload` | file_url, design_system=None, n_colors=6 | run engine on an **uploaded** PNG/SVG (no generation): creates a Design Request (status Ready, provider none) with one candidate; returns same shape as get_request_status. This endpoint is the product's free-tier hook and works today with zero provider spend. |
 | `audit_upload` | file_url, design_system=None | `{"score", "report_json"}` — read-only check of any asset |
+| `list_templates` | — | `[{"name", "label", "description", "format", "slots": [{"slot", "kind", "label", "required"}], "items": {"required", "fields"} \| null}]` — the poster templates `source_mode="Template"` renders. `kind` is `text` or `image`; an `items` region (menus) takes repeated `{title, price, image_url}` rows. Only the slots a template marks `required` must be filled; every other slot is left out when empty. |
 | `list_design_systems` | — | systems visible to the session user |
 
 Permissions: standard DocType permissions on Design System / Request /

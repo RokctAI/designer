@@ -60,6 +60,8 @@ CORE_SCALAR_FIELDS = ("max_colors", "snap_warning_distance", "type_scale",
 # contract. On import they are kept under extensions.designer (which
 # the engine reads back) instead of being dropped.
 DESIGNER_ONLY_PATHS = (("layout", "alignment_tolerance"),
+                       ("layout", "max_accents"),
+                       ("layout", "max_font_families"),
                        ("layout", "role_aware_snapping"),
                        ("print", "icc_profile"),
                        ("formats",))

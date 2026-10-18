@@ -39,6 +39,8 @@ class DesignRequest(Document):
     def validate(self):
         if self.source_mode == "Generated" and not (self.prompt or "").strip():
             frappe.throw("A prompt is required when source_mode is Generated")
+        if self.source_mode == "Template" and not (self.template or "").strip():
+            frappe.throw("A template is required when source_mode is Template")
         if self.n_candidates and int(self.n_candidates) > 4:
             self.n_candidates = 4
         self._check_status_transition()

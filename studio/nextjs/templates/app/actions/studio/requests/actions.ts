@@ -38,6 +38,15 @@ export async function createDesignRequest(values: NewDesignRequest) {
   return out;
 }
 
+export async function listTemplates() {
+  try {
+    return await RequestService.templates();
+  } catch (error) {
+    console.error("Failed to fetch poster templates:", error);
+    return [];
+  }
+}
+
 export async function queueDesignRequest(name: string) {
   const out = await RequestService.queue(name);
   revalidatePath(`/studio/requests/${name}`);
