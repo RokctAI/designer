@@ -4,7 +4,7 @@
   "app_type": {
     "tenant": {
       "dependencies": [
-        "designer-compliance",
+        "designer-compliance @ git+https://github.com/RokctAI/designer@f57d5e28a1d4b9410ccdf523d7ba9e33a2e57634",
         "startupos @ git+https://github.com/RokctAI/The-Rokct-Protocol@af85e3275154f4a8e4f19927d90fc0620c098539#subdirectory=core/utils/startup_os"
       ],
       "hooks": {
