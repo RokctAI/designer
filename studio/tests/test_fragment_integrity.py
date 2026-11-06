@@ -61,7 +61,13 @@ def test_manifest_shape():
     assert set(MANIFEST["app_type"]) == {"tenant", "control"}
     assert MANIFEST["app_type"]["control"] == {}
     tenant = MANIFEST["app_type"]["tenant"]
-    assert tenant["dependencies"][0] == "designer-compliance"
+    # Git-pinned (40-hex SHA): designer-compliance is not on PyPI, so a bare
+    # name makes `pip install` of the composed app fail.
+    engine_dep = tenant["dependencies"][0]
+    assert engine_dep.startswith("designer-compliance @ git+https://github.com/"
+                                 "RokctAI/designer@")
+    engine_sha = engine_dep.rsplit("@", 1)[1]
+    assert len(engine_sha) == 40 and all(c in "0123456789abcdef" for c in engine_sha)
     startupos_dep = tenant["dependencies"][1]
     assert startupos_dep.startswith("startupos @ git+https://github.com/"
                                     "RokctAI/The-Rokct-Protocol@")
