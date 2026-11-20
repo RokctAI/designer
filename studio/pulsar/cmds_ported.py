@@ -39,11 +39,12 @@ def require(doctype: str, ptype: str='read', doc=None):
         fx.throw('Not permitted', fx.PermissionError)
 
 
-def file_disk_path(file_url: str) -> str:
-    name = fx.db.get_value('File', {'file_url': file_url}, 'name')
-    if not name:
+def read_file_text(file_url: str) -> str:
+    """The text of a stored file (the site's file store; there is no disk path to a File on a Pulsar site)."""
+    from pulsar import http_api
+    if not fx.db.get_value('File', {'file_url': file_url}, 'name'):
         fx.throw(f'No File record for {file_url}')
-    return fx.get_doc('File', name).get_full_path()
+    return http_api.session_registry().file_store.read(file_url).decode('utf-8')
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 UPLOAD_EXTENSIONS = ('.png', '.jpg', '.jpeg', '.webp', '.svg', '.md')
 
@@ -104,8 +105,7 @@ def get_candidate_svg(candidate):
     require('Design Request', 'read', doc=req)
     if not cand.compliant_svg:
         fx.throw(f'Candidate {cand.name} has no compliant SVG yet')
-    with open(file_disk_path(cand.compliant_svg), encoding='utf-8') as fh:
-        return {'svg': fh.read(), 'score': cand.score_after, 'report_json': cand.report_json}
+    return {'svg': read_file_text(cand.compliant_svg), 'score': cand.score_after, 'report_json': cand.report_json}
 
 
 def get_request_status(name):

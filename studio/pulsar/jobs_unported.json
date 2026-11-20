@@ -1,4 +1,0 @@
-{
-  "tenant:all:studio.tenant.tasks.process_hot_folder": "needs a Pulsar equivalent of db.set_single_value",
-  "tenant:hourly:studio.tenant.tasks.sweep_queue": "needs a Pulsar equivalent of enqueue"
-}

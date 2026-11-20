@@ -1,0 +1,73 @@
+# Copyright (c) 2026 ROKCT INTELLIGENCE (PTY) LTD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+"""Review-token generation and expiry checks for Design Approval links.
+
+Pure functions: no frappe, no database. Tokens are opaque URL-safe
+strings; guests only ever see the token, never internal doc names.
+"""
+
+from __future__ import annotations
+
+import hmac
+import secrets
+from datetime import datetime, timedelta
+
+TOKEN_BYTES = 32  # 256 bits of entropy -> 43-char urlsafe string
+DEFAULT_EXPIRY_DAYS = 14
+
+REVIEW_DECISIONS = ("Approved", "Rejected", "Changes Requested")
+
+
+def generate_review_token(nbytes: int = TOKEN_BYTES) -> str:
+    """Cryptographically random, URL-safe, no padding characters."""
+    return secrets.token_urlsafe(nbytes)
+
+
+def tokens_equal(a: str, b: str) -> bool:
+    """Constant-time comparison for token checks."""
+    return hmac.compare_digest((a or "").encode(), (b or "").encode())
+
+
+def default_expiry(now: datetime, days: int = DEFAULT_EXPIRY_DAYS) -> datetime:
+    return now + timedelta(days=days)
+
+
+def token_expired(expires_on: datetime | None, now: datetime) -> bool:
+    """No expiry set means the link never expires."""
+    if expires_on is None:
+        return False
+    return now >= expires_on
+
+
+def is_valid_decision(decision: str) -> bool:
+    return decision in REVIEW_DECISIONS
+
+
+def proof_email_html(message: str | None, review_url: str, title: str = "") -> str:
+    """Body of the proof email: the sender's note, then the approve link.
+    Escapes user text; the link is the only markup."""
+    from html import escape
+
+    note = escape(message or "Please find your proof attached for approval.")
+    note = note.replace("\n", "<br>")
+    what = f" for <b>{escape(title)}</b>" if title else ""
+    return (
+        f"<p>{note}</p>"
+        f"<p>Review your proof{what} and approve it, reject it or request "
+        f"changes online:</p>"
+        f'<p><a href="{escape(review_url, quote=True)}">Open the proof</a></p>'
+        "<p>Please check spelling, numbers, contact details, colours and layout. "
+        "Printing starts only after approval.</p>"
+    )

@@ -1,9 +1,9 @@
 {
   "name": "studio_pulsar",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "requires_framework": "core/pulsar (sdk_cmds_v16, sdk_fx_v16)",
   "cmds_ported": "cmds_ported.py (committed; source of truth)",
   "cmds_unported": "cmds_unported.json (cmds still to hand-port, with the reason)",
   "jobs_ported": "jobs_ported.py (scheduler jobs, committed; source of truth)",
-  "jobs_unported": "jobs_unported.json (jobs still to hand-port, with the reason)"
+  "requirements": "requirements.txt (Pillow, numpy, PyYAML, pypdf for the designer-compliance engine; the optional startupos package is only needed for Document Requests)"
 }
