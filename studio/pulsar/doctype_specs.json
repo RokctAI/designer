@@ -1,4 +1,989 @@
 {
+ "docs": {
+  "Design Approval": {
+   "doctype": "DocType",
+   "fields": [
+    {
+     "fieldname": "request",
+     "fieldtype": "Link",
+     "label": "Design Request",
+     "options": "Design Request"
+    },
+    {
+     "fieldname": "campaign",
+     "fieldtype": "Link",
+     "label": "Design Campaign",
+     "options": "Design Campaign"
+    },
+    {
+     "fieldname": "candidate",
+     "fieldtype": "Link",
+     "label": "Candidate",
+     "options": "Design Candidate",
+     "reqd": 1
+    },
+    {
+     "fieldname": "token",
+     "fieldtype": "Data",
+     "label": "Token",
+     "unique": 1
+    },
+    {
+     "default": "Pending",
+     "fieldname": "status",
+     "fieldtype": "Select",
+     "label": "Status"
+    },
+    {
+     "fieldname": "client_comment",
+     "fieldtype": "Small Text",
+     "label": "Client Comment"
+    },
+    {
+     "fieldname": "approved_on",
+     "fieldtype": "Datetime",
+     "label": "Approved On"
+    },
+    {
+     "fieldname": "expires_on",
+     "fieldtype": "Datetime",
+     "label": "Expires On"
+    },
+    {
+     "fieldname": "proof_pdf",
+     "fieldtype": "Attach",
+     "label": "Proof PDF"
+    },
+    {
+     "fieldname": "client_email",
+     "fieldtype": "Data",
+     "label": "Sent To"
+    },
+    {
+     "fieldname": "sent_on",
+     "fieldtype": "Datetime",
+     "label": "Sent On"
+    }
+   ],
+   "name": "Design Approval"
+  },
+  "Design Campaign": {
+   "doctype": "DocType",
+   "fields": [
+    {
+     "fieldname": "title",
+     "fieldtype": "Data",
+     "label": "Title"
+    },
+    {
+     "fieldname": "brief",
+     "fieldtype": "Small Text",
+     "label": "Brief"
+    },
+    {
+     "fieldname": "customer",
+     "fieldtype": "Link",
+     "label": "Customer",
+     "options": "Customer"
+    },
+    {
+     "fieldname": "design_system",
+     "fieldtype": "Link",
+     "label": "Design System",
+     "options": "Design System",
+     "reqd": 1
+    },
+    {
+     "fieldname": "formats",
+     "fieldtype": "Table",
+     "label": "Formats",
+     "options": "Design Campaign Format",
+     "reqd": 1
+    },
+    {
+     "fieldname": "master_request",
+     "fieldtype": "Link",
+     "label": "Master Request",
+     "options": "Design Request"
+    },
+    {
+     "default": "Draft",
+     "fieldname": "status",
+     "fieldtype": "Select",
+     "label": "Status"
+    },
+    {
+     "fieldname": "error_message",
+     "fieldtype": "Small Text",
+     "label": "Error Message"
+    }
+   ],
+   "name": "Design Campaign"
+  },
+  "Design Campaign Format": {
+   "doctype": "DocType",
+   "fields": [
+    {
+     "fieldname": "format",
+     "fieldtype": "Data",
+     "label": "Format",
+     "reqd": 1
+    },
+    {
+     "fieldname": "action",
+     "fieldtype": "Select",
+     "label": "Action"
+    },
+    {
+     "fieldname": "derived_request",
+     "fieldtype": "Link",
+     "label": "Derived Request",
+     "options": "Design Request"
+    },
+    {
+     "fieldname": "candidate",
+     "fieldtype": "Link",
+     "label": "Candidate",
+     "options": "Design Candidate"
+    }
+   ],
+   "istable": 1,
+   "name": "Design Campaign Format"
+  },
+  "Design Candidate": {
+   "doctype": "DocType",
+   "fields": [
+    {
+     "fieldname": "request",
+     "fieldtype": "Link",
+     "label": "Design Request",
+     "options": "Design Request",
+     "reqd": 1
+    },
+    {
+     "fieldname": "slot",
+     "fieldtype": "Int",
+     "label": "Slot"
+    },
+    {
+     "fieldname": "attempt",
+     "fieldtype": "Int",
+     "label": "Attempt"
+    },
+    {
+     "fieldname": "raw_image",
+     "fieldtype": "Attach",
+     "label": "Raw Image"
+    },
+    {
+     "fieldname": "compliant_svg",
+     "fieldtype": "Attach",
+     "label": "Compliant SVG"
+    },
+    {
+     "fieldname": "score_before",
+     "fieldtype": "Float",
+     "label": "Score Before"
+    },
+    {
+     "fieldname": "score_after",
+     "fieldtype": "Float",
+     "label": "Score After"
+    },
+    {
+     "fieldname": "report_json",
+     "fieldtype": "Long Text",
+     "label": "Report JSON"
+    },
+    {
+     "fieldname": "passed",
+     "fieldtype": "Check",
+     "label": "Passed"
+    },
+    {
+     "fieldname": "selected",
+     "fieldtype": "Check",
+     "label": "Selected"
+    },
+    {
+     "fieldname": "revision_of",
+     "fieldtype": "Link",
+     "label": "Revision Of",
+     "options": "Design Candidate"
+    },
+    {
+     "fieldname": "generation_ms",
+     "fieldtype": "Int",
+     "label": "Generation ms"
+    },
+    {
+     "fieldname": "comply_ms",
+     "fieldtype": "Int",
+     "label": "Comply ms"
+    }
+   ],
+   "name": "Design Candidate"
+  },
+  "Design Candidate Revision": {
+   "doctype": "DocType",
+   "fields": [
+    {
+     "fieldname": "candidate",
+     "fieldtype": "Link",
+     "label": "Candidate",
+     "options": "Design Candidate",
+     "reqd": 1
+    },
+    {
+     "fieldname": "svg",
+     "fieldtype": "Attach",
+     "label": "SVG"
+    },
+    {
+     "fieldname": "score",
+     "fieldtype": "Float",
+     "label": "Score"
+    },
+    {
+     "fieldname": "report_json",
+     "fieldtype": "Long Text",
+     "label": "Report JSON"
+    },
+    {
+     "fieldname": "edited_by",
+     "fieldtype": "Link",
+     "label": "Edited By",
+     "options": "User"
+    }
+   ],
+   "name": "Design Candidate Revision"
+  },
+  "Design Color Token": {
+   "doctype": "DocType",
+   "fields": [
+    {
+     "fieldname": "token_name",
+     "fieldtype": "Data",
+     "label": "Token Name",
+     "reqd": 1
+    },
+    {
+     "fieldname": "hex",
+     "fieldtype": "Data",
+     "label": "Hex",
+     "reqd": 1
+    },
+    {
+     "default": "other",
+     "fieldname": "role",
+     "fieldtype": "Select",
+     "label": "Role"
+    },
+    {
+     "default": "0",
+     "fieldname": "derived",
+     "fieldtype": "Check",
+     "label": "Derived"
+    }
+   ],
+   "istable": 1,
+   "name": "Design Color Token"
+  },
+  "Design Font": {
+   "doctype": "DocType",
+   "fields": [
+    {
+     "fieldname": "font_name",
+     "fieldtype": "Data",
+     "label": "Font Name",
+     "reqd": 1
+    },
+    {
+     "fieldname": "descriptor",
+     "fieldtype": "Data",
+     "label": "Descriptor"
+    }
+   ],
+   "istable": 1,
+   "name": "Design Font"
+  },
+  "Design Print Job": {
+   "doctype": "DocType",
+   "fields": [
+    {
+     "fieldname": "candidate",
+     "fieldtype": "Link",
+     "label": "Deliverable Candidate",
+     "options": "Design Candidate",
+     "reqd": 1
+    },
+    {
+     "fieldname": "request",
+     "fieldtype": "Link",
+     "label": "Design Request",
+     "options": "Design Request"
+    },
+    {
+     "fieldname": "customer",
+     "fieldtype": "Link",
+     "label": "Customer",
+     "options": "Customer"
+    },
+    {
+     "fieldname": "vendor_name",
+     "fieldtype": "Data",
+     "label": "Vendor Name"
+    },
+    {
+     "fieldname": "final_size",
+     "fieldtype": "Data",
+     "label": "Final Size"
+    },
+    {
+     "fieldname": "sides",
+     "fieldtype": "Data",
+     "label": "Sides"
+    },
+    {
+     "fieldname": "material_finish",
+     "fieldtype": "Small Text",
+     "label": "Material / Finish"
+    },
+    {
+     "fieldname": "press_pdf",
+     "fieldtype": "Attach",
+     "label": "Press-Ready PDF"
+    },
+    {
+     "default": "Draft",
+     "fieldname": "status",
+     "fieldtype": "Select",
+     "label": "Status"
+    },
+    {
+     "fieldname": "sales_order",
+     "fieldtype": "Link",
+     "label": "Sales Order",
+     "options": "Sales Order"
+    },
+    {
+     "fieldname": "sales_invoice",
+     "fieldtype": "Link",
+     "label": "Sales Invoice",
+     "options": "Sales Invoice"
+    },
+    {
+     "fieldname": "quantity",
+     "fieldtype": "Int",
+     "label": "Quantity"
+    },
+    {
+     "fieldname": "stock",
+     "fieldtype": "Data",
+     "label": "Stock / Paper"
+    },
+    {
+     "fieldname": "due_date",
+     "fieldtype": "Date",
+     "label": "Due Date"
+    },
+    {
+     "fieldname": "sheet",
+     "fieldtype": "Data",
+     "label": "Press Sheet"
+    },
+    {
+     "fieldname": "imposed_pdf",
+     "fieldtype": "Attach",
+     "label": "Imposed Sheet PDF"
+    },
+    {
+     "fieldname": "ticket_pdf",
+     "fieldtype": "Attach",
+     "label": "Job Ticket PDF"
+    },
+    {
+     "fieldname": "layout_json",
+     "fieldtype": "Code",
+     "label": "Imposition Layout"
+    }
+   ],
+   "name": "Design Print Job"
+  },
+  "Design Request": {
+   "doctype": "DocType",
+   "fields": [
+    {
+     "fieldname": "title",
+     "fieldtype": "Data",
+     "label": "Title"
+    },
+    {
+     "fieldname": "customer",
+     "fieldtype": "Link",
+     "label": "Customer",
+     "options": "Customer"
+    },
+    {
+     "default": "Uploaded Artwork",
+     "fieldname": "source_mode",
+     "fieldtype": "Select",
+     "label": "Source Mode",
+     "reqd": 1
+    },
+    {
+     "fieldname": "prompt",
+     "fieldtype": "Small Text",
+     "label": "Prompt"
+    },
+    {
+     "fieldname": "composed_prompt",
+     "fieldtype": "Small Text",
+     "label": "Composed Prompt"
+    },
+    {
+     "fieldname": "template",
+     "fieldtype": "Data",
+     "label": "Template"
+    },
+    {
+     "fieldname": "template_data",
+     "fieldtype": "JSON",
+     "label": "Template Data"
+    },
+    {
+     "fieldname": "design_system",
+     "fieldtype": "Link",
+     "label": "Design System",
+     "options": "Design System",
+     "reqd": 1
+    },
+    {
+     "fieldname": "design_system_fingerprint",
+     "fieldtype": "Data",
+     "label": "Design System Fingerprint"
+    },
+    {
+     "default": "logo",
+     "fieldname": "format",
+     "fieldtype": "Data",
+     "label": "Format",
+     "reqd": 1
+    },
+    {
+     "default": "3",
+     "fieldname": "n_candidates",
+     "fieldtype": "Int",
+     "label": "Candidates"
+    },
+    {
+     "default": "95",
+     "fieldname": "min_score",
+     "fieldtype": "Float",
+     "label": "Min Score"
+    },
+    {
+     "default": "3",
+     "fieldname": "max_attempts",
+     "fieldtype": "Int",
+     "label": "Max Attempts"
+    },
+    {
+     "fieldname": "provider",
+     "fieldtype": "Link",
+     "label": "Provider",
+     "options": "Generation Provider"
+    },
+    {
+     "default": "6",
+     "fieldname": "n_colors",
+     "fieldtype": "Int",
+     "label": "Vectorize Colors"
+    },
+    {
+     "default": "Draft",
+     "fieldname": "status",
+     "fieldtype": "Select",
+     "label": "Status"
+    },
+    {
+     "fieldname": "error_message",
+     "fieldtype": "Small Text",
+     "label": "Error Message"
+    },
+    {
+     "fieldname": "requested_by",
+     "fieldtype": "Link",
+     "label": "Requested By",
+     "options": "User"
+    },
+    {
+     "fieldname": "sales_order",
+     "fieldtype": "Link",
+     "label": "Sales Order",
+     "options": "Sales Order"
+    },
+    {
+     "fieldname": "sales_invoice",
+     "fieldtype": "Link",
+     "label": "Sales Invoice",
+     "options": "Sales Invoice"
+    }
+   ],
+   "name": "Design Request"
+  },
+  "Design Studio Settings": {
+   "doctype": "DocType",
+   "fields": [
+    {
+     "fieldname": "default_provider",
+     "fieldtype": "Link",
+     "label": "Default Provider",
+     "options": "Generation Provider"
+    },
+    {
+     "default": "95",
+     "fieldname": "default_min_score",
+     "fieldtype": "Float",
+     "label": "Default Min Score"
+    },
+    {
+     "default": "3",
+     "fieldname": "default_max_attempts",
+     "fieldtype": "Int",
+     "label": "Default Max Attempts"
+    },
+    {
+     "default": "3",
+     "fieldname": "default_n_candidates",
+     "fieldtype": "Int",
+     "label": "Default Candidates"
+    },
+    {
+     "default": "6",
+     "fieldname": "default_n_colors",
+     "fieldtype": "Int",
+     "label": "Default Vectorize Colors"
+    },
+    {
+     "default": "1024",
+     "fieldname": "max_dim",
+     "fieldtype": "Int",
+     "label": "Max Input Dimension"
+    },
+    {
+     "default": "30",
+     "fieldname": "keep_raw_days",
+     "fieldtype": "Int",
+     "label": "Keep Raw Files (Days)"
+    },
+    {
+     "default": "0.35",
+     "fieldname": "campaign_regen_threshold",
+     "fieldtype": "Float",
+     "label": "Campaign Regen Threshold"
+    },
+    {
+     "default": "14",
+     "fieldname": "approval_link_expiry_days",
+     "fieldtype": "Int",
+     "label": "Approval Link Expiry (Days)"
+    },
+    {
+     "default": "/studio/review/{token}",
+     "fieldname": "review_url_template",
+     "fieldtype": "Data",
+     "label": "Review Page URL"
+    },
+    {
+     "default": "0",
+     "fieldname": "hot_folder_enabled",
+     "fieldtype": "Check",
+     "label": "Hot Folder Enabled"
+    },
+    {
+     "fieldname": "hot_folder_inbox",
+     "fieldtype": "Data",
+     "label": "Hot Folder Inbox Path"
+    },
+    {
+     "fieldname": "hot_folder_outbox",
+     "fieldtype": "Data",
+     "label": "Hot Folder Outbox Path"
+    },
+    {
+     "fieldname": "hot_folder_sheet",
+     "fieldtype": "Data",
+     "label": "Hot Folder Press Sheet"
+    },
+    {
+     "fieldname": "hot_folder_format",
+     "fieldtype": "Data",
+     "label": "Hot Folder Format"
+    },
+    {
+     "fieldname": "hot_folder_design_system",
+     "fieldtype": "Link",
+     "label": "Hot Folder Design System",
+     "options": "Design System"
+    },
+    {
+     "fieldname": "hot_folder_last_run",
+     "fieldtype": "Code",
+     "label": "Hot Folder Last Run"
+    }
+   ],
+   "issingle": 1,
+   "name": "Design Studio Settings"
+  },
+  "Design System": {
+   "doctype": "DocType",
+   "fields": [
+    {
+     "fieldname": "system_name",
+     "fieldtype": "Data",
+     "label": "System Name",
+     "reqd": 1,
+     "unique": 1
+    },
+    {
+     "fieldname": "brand_name",
+     "fieldtype": "Data",
+     "label": "Brand Name"
+    },
+    {
+     "fieldname": "customer",
+     "fieldtype": "Link",
+     "label": "Customer",
+     "options": "Customer"
+    },
+    {
+     "default": "0",
+     "fieldname": "is_default",
+     "fieldtype": "Check",
+     "label": "Is Default"
+    },
+    {
+     "fieldname": "seed_color_1",
+     "fieldtype": "Data",
+     "label": "Seed Color 1"
+    },
+    {
+     "fieldname": "seed_color_2",
+     "fieldtype": "Data",
+     "label": "Seed Color 2"
+    },
+    {
+     "fieldname": "seed_color_3",
+     "fieldtype": "Data",
+     "label": "Seed Color 3"
+    },
+    {
+     "fieldname": "color_tokens",
+     "fieldtype": "Table",
+     "label": "Color Tokens",
+     "options": "Design Color Token",
+     "reqd": 1
+    },
+    {
+     "default": "6",
+     "fieldname": "max_colors",
+     "fieldtype": "Int",
+     "label": "Max Colors"
+    },
+    {
+     "default": "0.18",
+     "fieldname": "snap_warning_distance",
+     "fieldtype": "Float",
+     "label": "Snap Warning Distance"
+    },
+    {
+     "fieldname": "fonts",
+     "fieldtype": "Table",
+     "label": "Fonts",
+     "options": "Design Font"
+    },
+    {
+     "default": "12,14,16,20,24,32,48,64",
+     "fieldname": "type_scale",
+     "fieldtype": "Data",
+     "label": "Type Scale"
+    },
+    {
+     "default": "8",
+     "fieldname": "grid",
+     "fieldtype": "Float",
+     "label": "Grid"
+    },
+    {
+     "default": "4",
+     "fieldname": "min_element_size",
+     "fieldtype": "Float",
+     "label": "Min Element Size"
+    },
+    {
+     "default": "1,2,4,8",
+     "fieldname": "stroke_widths",
+     "fieldtype": "Data",
+     "label": "Stroke Widths"
+    },
+    {
+     "default": "4.5",
+     "fieldname": "min_contrast_text",
+     "fieldtype": "Float",
+     "label": "Min Contrast (Text)"
+    },
+    {
+     "default": "3.0",
+     "fieldname": "min_contrast_large_text",
+     "fieldtype": "Float",
+     "label": "Min Contrast (Large Text)"
+    },
+    {
+     "default": "24",
+     "fieldname": "large_text_size",
+     "fieldtype": "Float",
+     "label": "Large Text Size"
+    },
+    {
+     "default": "1",
+     "fieldname": "gradient_allowed",
+     "fieldtype": "Check",
+     "label": "Gradient Allowed"
+    },
+    {
+     "default": "4",
+     "fieldname": "gradient_max_stops",
+     "fieldtype": "Int",
+     "label": "Gradient Max Stops"
+    },
+    {
+     "fieldname": "print_section",
+     "fieldtype": "Section Break",
+     "label": "Print"
+    },
+    {
+     "default": "0",
+     "fieldname": "print_bleed",
+     "fieldtype": "Float",
+     "label": "Print Bleed"
+    },
+    {
+     "default": "0",
+     "fieldname": "print_min_stroke",
+     "fieldtype": "Float",
+     "label": "Print Min Stroke"
+    },
+    {
+     "default": "0",
+     "fieldname": "print_max_ink_coverage",
+     "fieldtype": "Float",
+     "label": "Print Max Ink Coverage"
+    },
+    {
+     "fieldname": "extensions_section",
+     "fieldtype": "Section Break",
+     "label": "Product Extensions"
+    },
+    {
+     "fieldname": "extensions",
+     "fieldtype": "Table",
+     "label": "Extensions",
+     "options": "Design System Extension"
+    }
+   ],
+   "name": "Design System"
+  },
+  "Design System Extension": {
+   "doctype": "DocType",
+   "fields": [
+    {
+     "fieldname": "namespace",
+     "fieldtype": "Data",
+     "label": "Namespace",
+     "reqd": 1
+    },
+    {
+     "fieldname": "data",
+     "fieldtype": "JSON",
+     "label": "Data"
+    }
+   ],
+   "istable": 1,
+   "name": "Design System Extension"
+  },
+  "Document Request": {
+   "doctype": "DocType",
+   "fields": [
+    {
+     "fieldname": "title",
+     "fieldtype": "Data",
+     "label": "Title"
+    },
+    {
+     "fieldname": "business_name",
+     "fieldtype": "Data",
+     "label": "Business Name",
+     "reqd": 1
+    },
+    {
+     "fieldname": "customer",
+     "fieldtype": "Link",
+     "label": "Customer",
+     "options": "Customer"
+    },
+    {
+     "default": "Full Suite",
+     "fieldname": "document_scope",
+     "fieldtype": "Select",
+     "label": "Document Scope",
+     "reqd": 1
+    },
+    {
+     "fieldname": "questions_file",
+     "fieldtype": "Attach",
+     "label": "Questions File"
+    },
+    {
+     "fieldname": "workspace_root",
+     "fieldtype": "Data",
+     "label": "Workspace Root"
+    },
+    {
+     "fieldname": "compliance_root",
+     "fieldtype": "Data",
+     "label": "Compliance Folder"
+    },
+    {
+     "default": "0",
+     "fieldname": "render_binaries",
+     "fieldtype": "Check",
+     "label": "Render Binaries"
+    },
+    {
+     "fieldname": "artifacts",
+     "fieldtype": "Small Text",
+     "label": "Artifacts"
+    },
+    {
+     "default": "0",
+     "fieldname": "render_profile",
+     "fieldtype": "Check",
+     "label": "Render A4 Profile"
+    },
+    {
+     "fieldname": "design_system",
+     "fieldtype": "Link",
+     "label": "Design System",
+     "options": "Design System"
+    },
+    {
+     "fieldname": "profile_pack_dir",
+     "fieldtype": "Data",
+     "label": "Profile Pack Folder"
+    },
+    {
+     "default": "Draft",
+     "fieldname": "status",
+     "fieldtype": "Select",
+     "label": "Status"
+    },
+    {
+     "fieldname": "error_message",
+     "fieldtype": "Small Text",
+     "label": "Error Message"
+    },
+    {
+     "fieldname": "warnings",
+     "fieldtype": "Small Text",
+     "label": "Warnings"
+    },
+    {
+     "fieldname": "completeness",
+     "fieldtype": "Float",
+     "label": "Completeness"
+    },
+    {
+     "fieldname": "outputs",
+     "fieldtype": "Table",
+     "label": "Outputs",
+     "options": "Document Request Output"
+    },
+    {
+     "fieldname": "requested_by",
+     "fieldtype": "Link",
+     "label": "Requested By",
+     "options": "User"
+    }
+   ],
+   "name": "Document Request"
+  },
+  "Document Request Output": {
+   "doctype": "DocType",
+   "fields": [
+    {
+     "fieldname": "file_path",
+     "fieldtype": "Data",
+     "label": "File Path",
+     "reqd": 1
+    },
+    {
+     "fieldname": "kind",
+     "fieldtype": "Select",
+     "label": "Kind"
+    }
+   ],
+   "istable": 1,
+   "name": "Document Request Output"
+  },
+  "Generation Provider": {
+   "doctype": "DocType",
+   "fields": [
+    {
+     "fieldname": "provider_name",
+     "fieldtype": "Data",
+     "label": "Provider Name",
+     "reqd": 1,
+     "unique": 1
+    },
+    {
+     "default": "upload",
+     "fieldname": "provider_type",
+     "fieldtype": "Select",
+     "label": "Provider Type",
+     "reqd": 1
+    },
+    {
+     "fieldname": "api_key",
+     "fieldtype": "Password",
+     "label": "API Key"
+    },
+    {
+     "fieldname": "endpoint",
+     "fieldtype": "Data",
+     "label": "Endpoint"
+    },
+    {
+     "fieldname": "model",
+     "fieldtype": "Data",
+     "label": "Model"
+    },
+    {
+     "default": "1",
+     "fieldname": "enabled",
+     "fieldtype": "Check",
+     "label": "Enabled"
+    },
+    {
+     "default": "flat vector illustration, solid colors, clean shapes, no gradients, no photographic textures, plain background",
+     "fieldname": "style_suffix",
+     "fieldtype": "Small Text",
+     "label": "Style Suffix"
+    }
+   ],
+   "name": "Generation Provider"
+  }
+ },
  "doctypes": {
   "Design Approval": {
    "autoname": "DAP-.#####",
