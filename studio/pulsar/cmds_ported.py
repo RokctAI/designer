@@ -12,11 +12,10 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""Gateway cmds of the designer/studio SDK, ported from its frappe/ sources by tools/gen_sdk_cmds.py.
+"""Gateway cmds of the designer/studio SDK. Committed; source of truth: edit here.
 
-This file is pulsar/'s own source from now on: edit it here. The cmds are written against pulsar.sdk_fx_v16 (`fx`).
-Cmds that could not be ported are listed with their reason in cmds_unported.json.
-Loaded by pulsar.sdk_cmds_v16; a key core already serves keeps core's handler."""
+Written against pulsar.sdk_fx_v16 (`fx`). Cmds still to port are listed with their reason in
+cmds_unported.json. Loaded by pulsar.sdk_cmds_v16; a key core already serves keeps core's handler."""
 
 import inspect
 
