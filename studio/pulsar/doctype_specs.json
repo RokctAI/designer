@@ -1740,5 +1740,6 @@
    "tables": {}
   }
  },
+ "generator": "pulsar/tools/gen_sdk_doctype_specs.py",
  "source": "designer/studio frappe/src and pulsar/doctypes DocType JSON"
 }
