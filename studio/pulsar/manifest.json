@@ -1,0 +1,7 @@
+{
+  "name": "studio_pulsar",
+  "version": "0.1.0",
+  "requires_framework": "core/pulsar (sdk_cmds_v16, sdk_fx_v16)",
+  "cmds_ported": "cmds_ported.py (committed; source of truth)",
+  "cmds_unported": "cmds_unported.json (cmds still to hand-port, with the reason)"
+}
